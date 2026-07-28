@@ -1,0 +1,2 @@
+import type { MetadataRoute } from 'next';
+export default function sitemap(): MetadataRoute.Sitemap { const base=process.env.NEXT_PUBLIC_SITE_URL||'https://sohocambados.es'; return ['','/menu','/checkout','/sobre-nosotros','/preguntas-frecuentes','/condiciones','/privacidad','/legal','/cookies'].map((path)=>({url:`${base}${path}`,lastModified:new Date(),changeFrequency:path==='/menu'?'daily':'monthly',priority:path===''?1:path==='/menu'?0.9:0.5})); }
