@@ -202,9 +202,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, url: session.url, orderId: order.id });
   } catch (error: any) {
     if (createdOrderId) {
-      await supabaseAdmin.from('orders').update({ status: 'cancelled', payment_status: 'failed', cancellation_reason: 'No se pudo iniciar el pago.', updated_at: new Date().toISOString() }).eq('id', createdOrderId);
+      await supabaseAdmin.from('orders').update({ status: 'cancelled', payment_status: 'failed', cancellation_reason: 'No se pudo iniciar el pago.', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', createdOrderId);
     }
     console.error('checkout_session_create_failed', { orderId: createdOrderId, error: error?.message });
-    return NextResponse.json({ ok: false, error: error?.message || 'No se pudo iniciar el pago.' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'No se pudo iniciar el pago. Intentalo de nuevo.' }, { status: 500 });
   }
 }

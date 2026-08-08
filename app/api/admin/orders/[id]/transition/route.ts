@@ -12,6 +12,15 @@ const schema = z.object({
   cancellationReason: z.string().trim().max(500).nullable().optional()
 });
 
+const allowedTransitions: Record<string, string[]> = {
+  pending: ['accepted', 'cancelled'],
+  accepted: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['delivered', 'cancelled'],
+  delivered: [],
+  cancelled: []
+};
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
@@ -24,6 +33,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!order) return NextResponse.json({ ok: false, error: 'Pedido no encontrado.' }, { status: 404 });
 
     const next = parsed.data.status;
+    if (next !== order.status && !allowedTransitions[order.status]?.includes(next)) {
+      return NextResponse.json({ ok: false, error: 'Ese cambio de estado no esta permitido.' }, { status: 409 });
+    }
+    if (!['authorized', 'paid', 'refund_pending', 'refunded'].includes(order.payment_status)) {
+      return NextResponse.json({ ok: false, error: 'El pedido todavia no tiene un pago confirmado.' }, { status: 409 });
+    }
     const update: Record<string, unknown> = {
       status: next,
       estimated_time: parsed.data.estimatedTime ?? order.estimated_time,
@@ -33,6 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (next === 'accepted' && !order.accepted_at) update.accepted_at = new Date().toISOString();
     if (next === 'preparing' && !order.preparing_at) update.preparing_at = new Date().toISOString();
     if (next === 'ready' && !order.ready_at) update.ready_at = new Date().toISOString();
+    if (next === 'delivered' && !order.delivered_at) update.delivered_at = new Date().toISOString();
 
     if (next === 'preparing') {
       if (!order.stripe_payment_intent_id) throw new Error('El pedido no tiene una autorización de Stripe asociada.');
@@ -98,6 +114,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (error: any) {
     const status = error?.message === 'UNAUTHORIZED' ? 401 : error?.message === 'FORBIDDEN' ? 403 : 500;
     console.error('admin_order_transition_failed', { orderId: id, error: error?.message });
-    return NextResponse.json({ ok: false, error: status === 500 ? (error?.message || 'No se pudo actualizar el pedido.') : 'No autorizado.' }, { status });
+    return NextResponse.json({ ok: false, error: status === 500 ? 'No se pudo actualizar el pedido. Intentalo de nuevo.' : 'No autorizado.' }, { status });
   }
 }

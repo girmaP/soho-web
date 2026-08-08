@@ -5,11 +5,6 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { appendOrderEvent } from '@/lib/server/orderEvents';
 import { sendOrderEmail } from '@/lib/server/orderEmails';
 
-function isMissingRelation(error: any) {
-  const message = String(error?.message || '');
-  return error?.code === '42P01' || error?.code === 'PGRST205' || /relation .* does not exist|schema cache/i.test(message);
-}
-
 async function findOrderIdByPaymentIntent(paymentIntentId?: string | null) {
   if (!paymentIntentId) return null;
   const { data, error } = await supabaseAdmin.from('orders').select('id').eq('stripe_payment_intent_id', paymentIntentId).maybeSingle();
@@ -17,27 +12,47 @@ async function findOrderIdByPaymentIntent(paymentIntentId?: string | null) {
   return data?.id || null;
 }
 
-async function registerAuthorization(orderId: string, paymentIntentId: string, eventId: string) {
+async function registerAuthorization(orderId: string, paymentIntent: Stripe.PaymentIntent, eventId: string, sessionId?: string) {
+  if (!['requires_capture', 'succeeded'].includes(paymentIntent.status)) {
+    throw new Error(`PaymentIntent ${paymentIntent.id} no esta autorizado.`);
+  }
+  const { data: order, error: orderError } = await supabaseAdmin
+    .from('orders').select('id,total_price,stripe_session_id,stripe_payment_intent_id,payment_status').eq('id', orderId).maybeSingle();
+  if (orderError) throw orderError;
+  if (!order) throw new Error('El pedido asociado al pago no existe.');
+  if (sessionId && order.stripe_session_id && order.stripe_session_id !== sessionId) {
+    throw new Error('La sesion de Stripe no corresponde al pedido.');
+  }
+  if (paymentIntent.currency !== 'eur' || paymentIntent.amount !== Math.round(Number(order.total_price) * 100)) {
+    throw new Error('El importe autorizado no coincide con el pedido.');
+  }
   const now = new Date().toISOString();
   const { data: activated, error } = await supabaseAdmin.from('orders').update({
     status: 'pending',
-    payment_status: 'authorized',
-    stripe_payment_intent_id: paymentIntentId,
+    payment_status: paymentIntent.status === 'succeeded' ? 'paid' : 'authorized',
+    stripe_payment_intent_id: paymentIntent.id,
+    stripe_session_id: sessionId || order.stripe_session_id,
+    paid_at: paymentIntent.status === 'succeeded' ? now : null,
     updated_at: now
   }).eq('id', orderId).in('payment_status', ['pending', 'failed']).select('id').maybeSingle();
   if (error) throw error;
-  if (!activated) return;
+  if (!activated) {
+    if (order.stripe_payment_intent_id === paymentIntent.id && ['authorized', 'paid'].includes(order.payment_status)) {
+      const email = await sendOrderEmail(orderId, 'received');
+      if (!email.ok && !email.skipped) throw new Error('No se pudo enviar el correo de confirmacion.');
+    }
+    return;
+  }
 
   await appendOrderEvent({
     orderId,
     eventType: 'payment.authorized',
     actorType: 'stripe',
     stripeEventId: eventId,
-    metadata: { paymentIntentId }
-  });
-  await sendOrderEmail(orderId, 'received').catch((emailError) =>
-    console.error('order_email_dispatch_failed', { orderId, kind: 'received', error: emailError?.message })
-  );
+    metadata: { paymentIntentId: paymentIntent.id, stripeSessionId: sessionId || null }
+  }).catch((eventError) => console.error('order_event_append_failed', { orderId, eventId, error: eventError?.message }));
+  const email = await sendOrderEmail(orderId, 'received');
+  if (!email.ok && !email.skipped) throw new Error('No se pudo enviar el correo de confirmacion.');
 }
 
 async function registerPaymentSucceeded(paymentIntent: Stripe.PaymentIntent, eventId: string) {
@@ -47,11 +62,13 @@ async function registerPaymentSucceeded(paymentIntent: Stripe.PaymentIntent, eve
   if (error) throw error;
   if (!order || order.payment_status === 'refunded' || order.payment_status === 'refund_pending') return;
   if (order.payment_status !== 'paid') {
-    await supabaseAdmin.from('orders').update({
+    const { error: updateError } = await supabaseAdmin.from('orders').update({
       payment_status: 'paid',
+      stripe_payment_intent_id: paymentIntent.id,
       paid_at: order.paid_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     }).eq('id', orderId);
+    if (updateError) throw updateError;
     await appendOrderEvent({ orderId, eventType: 'payment.succeeded', actorType: 'stripe', stripeEventId: eventId, metadata: { paymentIntentId: paymentIntent.id } });
   }
 }
@@ -59,10 +76,11 @@ async function registerPaymentSucceeded(paymentIntent: Stripe.PaymentIntent, eve
 async function registerPaymentFailed(paymentIntent: Stripe.PaymentIntent, eventId: string) {
   const orderId = paymentIntent.metadata?.order_id || await findOrderIdByPaymentIntent(paymentIntent.id);
   if (!orderId) return;
-  await supabaseAdmin.from('orders').update({
+  const { error } = await supabaseAdmin.from('orders').update({
     payment_status: 'failed',
     updated_at: new Date().toISOString()
   }).eq('id', orderId).in('payment_status', ['pending', 'failed']);
+  if (error) throw error;
   await appendOrderEvent({ orderId, eventType: 'payment.failed', actorType: 'stripe', stripeEventId: eventId, metadata: { paymentIntentId: paymentIntent.id } });
 }
 
@@ -78,7 +96,8 @@ async function registerPaymentCancelled(paymentIntent: Stripe.PaymentIntent, eve
     update.cancelled_at = new Date().toISOString();
     update.cancellation_reason = 'La autorización de pago fue cancelada.';
   }
-  await supabaseAdmin.from('orders').update(update).eq('id', orderId);
+  const { error: updateError } = await supabaseAdmin.from('orders').update(update).eq('id', orderId);
+  if (updateError) throw updateError;
   await appendOrderEvent({ orderId, eventType: 'payment.cancelled', actorType: 'stripe', stripeEventId: eventId, metadata: { paymentIntentId: paymentIntent.id } });
 }
 
@@ -87,13 +106,14 @@ async function updateRefund(refund: Stripe.Refund, eventId: string) {
   const orderId = refund.metadata?.order_id || await findOrderIdByPaymentIntent(paymentIntentId);
   if (!orderId) return;
   const succeeded = refund.status === 'succeeded';
-  await supabaseAdmin.from('orders').update({
+  const { error } = await supabaseAdmin.from('orders').update({
     payment_status: succeeded ? 'refunded' : 'refund_pending',
     stripe_refund_id: refund.id,
     refunded_at: succeeded ? new Date().toISOString() : null,
     refunded_amount: succeeded ? Number((refund.amount / 100).toFixed(2)) : 0,
     updated_at: new Date().toISOString()
   }).eq('id', orderId);
+  if (error) throw error;
   await appendOrderEvent({
     orderId,
     eventType: succeeded ? 'refund.succeeded' : 'refund.updated',
@@ -111,12 +131,13 @@ async function updateChargeRefunded(charge: Stripe.Charge, eventId: string) {
   const orderId = charge.metadata?.order_id || await findOrderIdByPaymentIntent(paymentIntentId);
   if (!orderId || !charge.refunded) return;
   const refundedAmount = Number(((charge.amount_refunded || charge.amount) / 100).toFixed(2));
-  await supabaseAdmin.from('orders').update({
+  const { error } = await supabaseAdmin.from('orders').update({
     payment_status: 'refunded',
     refunded_at: new Date().toISOString(),
     refunded_amount: refundedAmount,
     updated_at: new Date().toISOString()
   }).eq('id', orderId);
+  if (error) throw error;
   await appendOrderEvent({ orderId, eventType: 'charge.refunded', actorType: 'stripe', stripeEventId: eventId, metadata: { chargeId: charge.id, amount: refundedAmount } });
   await sendOrderEmail(orderId, 'refunded').catch((emailError) =>
     console.error('order_email_dispatch_failed', { orderId, kind: 'refunded', error: emailError?.message })
@@ -136,21 +157,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Firma inválida.' }, { status: 400 });
   }
 
-  let eventLogAvailable = true;
   try {
-    const { data: existing, error: readError } = await supabaseAdmin.from('stripe_webhook_events').select('event_id').eq('event_id', event.id).maybeSingle();
-    if (readError) throw readError;
-    if (existing) return NextResponse.json({ received: true, duplicate: true });
-    const { error: insertError } = await supabaseAdmin.from('stripe_webhook_events').insert({ event_id: event.id, event_type: event.type, status: 'processing' });
-    if (insertError) throw insertError;
+    const { data: claimed, error: claimError } = await supabaseAdmin.rpc('claim_stripe_webhook_event', {
+      p_event_id: event.id,
+      p_event_type: event.type
+    });
+    if (claimError) throw claimError;
+    if (!claimed) return NextResponse.json({ received: true, duplicate: true });
   } catch (error: any) {
-    if (isMissingRelation(error)) {
-      eventLogAvailable = false;
-      console.warn('stripe_webhook_event_log_missing', { eventId: event.id, type: event.type });
-    } else {
-      console.error('stripe_webhook_event_log_failed', { eventId: event.id, type: event.type, error: error?.message });
-      return NextResponse.json({ error: 'No se pudo registrar el evento.' }, { status: 500 });
-    }
+    console.error('stripe_webhook_event_log_failed', { eventId: event.id, type: event.type, error: error?.message });
+    return NextResponse.json({ error: 'No se pudo registrar el evento.' }, { status: 500 });
   }
 
   try {
@@ -160,11 +176,15 @@ export async function POST(request: Request) {
       const orderId = session.metadata?.order_id;
       const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
       if (!orderId || !paymentIntentId) throw new Error('La sesión completada no contiene order_id o PaymentIntent.');
-      await registerAuthorization(orderId, paymentIntentId, event.id);
+      const paymentIntent = typeof session.payment_intent === 'string'
+        ? await stripe.paymentIntents.retrieve(session.payment_intent)
+        : session.payment_intent;
+      if (!paymentIntent || paymentIntent.id !== paymentIntentId) throw new Error('PaymentIntent no disponible.');
+      await registerAuthorization(orderId, paymentIntent, event.id, session.id);
     } else if (event.type === 'payment_intent.amount_capturable_updated') {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
       const orderId = paymentIntent.metadata?.order_id;
-      if (orderId) await registerAuthorization(orderId, paymentIntent.id, event.id);
+      if (orderId) await registerAuthorization(orderId, paymentIntent, event.id);
     } else if (event.type === 'payment_intent.succeeded') {
       await registerPaymentSucceeded(event.data.object as Stripe.PaymentIntent, event.id);
     } else if (event.type === 'payment_intent.payment_failed') {
@@ -175,13 +195,14 @@ export async function POST(request: Request) {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.order_id;
       if (orderId) {
-        await supabaseAdmin.from('orders').update({
+        const { error: expirationError } = await supabaseAdmin.from('orders').update({
           payment_status: 'failed',
           status: 'cancelled',
           cancellation_reason: 'La sesión de pago caducó.',
           cancelled_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }).eq('id', orderId).eq('payment_status', 'pending');
+        if (expirationError) throw expirationError;
         await appendOrderEvent({ orderId, eventType: 'checkout.expired', actorType: 'stripe', stripeEventId: event.id });
       }
     } else if (event.type === 'refund.updated' || event.type === 'refund.created') {
@@ -190,14 +211,11 @@ export async function POST(request: Request) {
       await updateChargeRefunded(event.data.object as Stripe.Charge, event.id);
     }
 
-    if (eventLogAvailable) {
-      await supabaseAdmin.from('stripe_webhook_events').update({ status: 'processed', processed_at: new Date().toISOString(), error_message: null }).eq('event_id', event.id);
-    }
+    const { error: completionError } = await supabaseAdmin.from('stripe_webhook_events').update({ status: 'processed', processed_at: new Date().toISOString(), error_message: null }).eq('event_id', event.id);
+    if (completionError) throw completionError;
     return NextResponse.json({ received: true });
   } catch (error: any) {
-    if (eventLogAvailable) {
-      await supabaseAdmin.from('stripe_webhook_events').update({ status: 'failed', error_message: error?.message || 'Unknown error', processed_at: new Date().toISOString() }).eq('event_id', event.id);
-    }
+    await supabaseAdmin.from('stripe_webhook_events').update({ status: 'failed', error_message: error?.message || 'Unknown error', processed_at: new Date().toISOString() }).eq('event_id', event.id);
     console.error('stripe_webhook_failed', { eventId: event.id, type: event.type, error: error?.message });
     return NextResponse.json({ error: 'Error procesando webhook.' }, { status: 500 });
   }

@@ -55,6 +55,7 @@ function OrderStatusContent() {
   const orderToken = searchParams.get('token') || '';
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [now, setNow] = useState(Date.now());
 
@@ -64,9 +65,11 @@ function OrderStatusContent() {
       const result = await response.json().catch(() => null);
       if (response.ok && result?.order) {
         setOrder(result.order);
+        setConfirming(false);
         setUpdatedAt(new Date());
       } else {
         setOrder(null);
+        setConfirming(response.status === 409 && result?.code === 'ORDER_CONFIRMING');
       }
     } finally {
       setLoading(false);
@@ -127,8 +130,11 @@ function OrderStatusContent() {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div className="rounded-[2rem] bg-white p-8 shadow-xl shadow-cyan-200/30">
-          <h1 className="text-3xl font-black">Pedido no encontrado</h1>
+          <h1 className="text-3xl font-black">{confirming ? 'Confirmando tu pedido' : 'Pedido no encontrado'}</h1>
+          {confirming && <p className="mt-2 text-neutral-600">Stripe esta terminando de confirmar la autorizacion. Esta pagina se actualizara automaticamente en unos segundos.</p>}
+          <div className={confirming ? 'hidden' : ''}>
           <p className="mt-2 text-neutral-600">Revisa que estás usando el enlace privado completo del pedido o contacta con SOHO.</p>
+          </div>
         </div>
       </main>
     );

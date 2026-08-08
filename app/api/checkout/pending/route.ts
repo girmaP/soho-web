@@ -49,6 +49,7 @@ export async function POST(request: Request) {
   await supabaseAdmin.from('orders').update({
     status: 'cancelled',
     payment_status: 'cancelled',
+    cancelled_at: new Date().toISOString(),
     cancellation_reason: 'El cliente canceló el proceso antes de confirmar el pago.',
     updated_at: new Date().toISOString()
   }).eq('id', orderId).in('payment_status', ['pending', 'failed']);

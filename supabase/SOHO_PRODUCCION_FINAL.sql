@@ -70,6 +70,7 @@ create table if not exists public.orders (
   accepted_at timestamptz,
   preparing_at timestamptz,
   ready_at timestamptz,
+  delivered_at timestamptz,
   paid_at timestamptz,
   cancelled_at timestamptz,
   refunded_at timestamptz,
@@ -178,6 +179,7 @@ alter table public.orders add column if not exists refund_reason text;
 alter table public.orders add column if not exists accepted_at timestamptz;
 alter table public.orders add column if not exists preparing_at timestamptz;
 alter table public.orders add column if not exists ready_at timestamptz;
+alter table public.orders add column if not exists delivered_at timestamptz;
 alter table public.orders add column if not exists paid_at timestamptz;
 alter table public.orders add column if not exists cancelled_at timestamptz;
 alter table public.orders add column if not exists refunded_at timestamptz;
@@ -242,6 +244,8 @@ where category_id in (
 create unique index if not exists orders_order_token_key on public.orders(order_token);
 create unique index if not exists orders_checkout_attempt_id_key on public.orders(checkout_attempt_id) where checkout_attempt_id is not null;
 create index if not exists orders_created_at_idx on public.orders(created_at desc);
+create unique index if not exists orders_stripe_session_id_key on public.orders(stripe_session_id) where stripe_session_id is not null;
+create unique index if not exists orders_stripe_payment_intent_id_key on public.orders(stripe_payment_intent_id) where stripe_payment_intent_id is not null;
 create index if not exists orders_unacknowledged_created_idx on public.orders(created_at desc) where received_acknowledged_at is null;
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
 create index if not exists order_events_order_id_idx on public.order_events(order_id,created_at);
@@ -253,6 +257,28 @@ update public.business_settings set
   fiscal_address=case when trim(coalesce(fiscal_address,''))='' then 'Calle A Mariña, 3, 36630 Cambados, Pontevedra' else fiscal_address end,
   admin_email=case when trim(coalesce(admin_email,''))='' then 'sohocambados@gmail.com' else admin_email end
 where id='main';
+
+-- Reclamo atomico: solo un proceso maneja cada evento. Los fallidos pueden
+-- reintentarse; los ya procesados o actualmente en curso se ignoran.
+create or replace function public.claim_stripe_webhook_event(p_event_id text,p_event_type text)
+returns boolean
+language plpgsql security definer set search_path=public
+as $$
+declare claimed boolean;
+begin
+  insert into public.stripe_webhook_events(event_id,event_type,status,processed_at,error_message)
+  values(p_event_id,p_event_type,'processing',null,null)
+  on conflict(event_id) do update set
+    event_type=excluded.event_type,
+    status='processing',
+    processed_at=null,
+    error_message=null
+  where stripe_webhook_events.status='failed'
+  returning true into claimed;
+  return coalesce(claimed,false);
+end $$;
+revoke all on function public.claim_stripe_webhook_event(text,text) from public;
+grant execute on function public.claim_stripe_webhook_event(text,text) to service_role;
 
 -- Seguridad ------------------------------------------------------------------
 create or replace function public.is_admin()
@@ -301,6 +327,15 @@ alter table public.stripe_webhook_events enable row level security;
 alter table public.order_email_deliveries enable row level security;
 alter table public.business_settings enable row level security;
 alter table public.contact_messages enable row level security;
+
+-- El panel depende de cambios en tiempo real para mostrar una autorizacion
+-- inmediatamente despues de que el webhook active el pedido.
+do $$ begin
+  alter publication supabase_realtime add table public.orders;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.order_items;
+exception when duplicate_object then null; end $$;
 
 revoke all on public.orders,public.order_items,public.order_events,public.stripe_webhook_events,public.order_email_deliveries from anon;
 grant select on public.categories,public.products,public.business_settings to anon,authenticated;

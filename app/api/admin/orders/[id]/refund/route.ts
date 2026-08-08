@@ -41,6 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: true, order: updated });
   } catch (error: any) {
     const status = error?.message === 'UNAUTHORIZED' ? 401 : error?.message === 'FORBIDDEN' ? 403 : 500;
-    return NextResponse.json({ ok: false, error: status === 500 ? (error?.message || 'No se pudo tramitar el reembolso.') : 'No autorizado.' }, { status });
+    console.error('admin_order_refund_failed', { orderId: id, error: error?.message });
+    return NextResponse.json({ ok: false, error: status === 500 ? 'No se pudo tramitar el reembolso. Intentalo de nuevo.' : 'No autorizado.' }, { status });
   }
 }

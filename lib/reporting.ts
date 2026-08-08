@@ -136,7 +136,7 @@ export function buildDashboardAnalytics(orders: any[], range: DateRange, product
       categoryValue.quantity += Number(item.quantity || 0); categoryValue.revenue += Number(item.total_price || 0); categoryMap.set(category, categoryValue);
     });
     const start = order.accepted_at || order.created_at;
-    const end = order.ready_at || order.prepared_at || order.updated_at;
+    const end = order.ready_at || order.updated_at;
     if (start && end && ['ready', 'delivered'].includes(order.status)) {
       const minutes = (new Date(end).getTime() - new Date(start).getTime()) / 60000;
       if (minutes >= 0 && minutes <= 360) preparationMinutes.push(minutes);

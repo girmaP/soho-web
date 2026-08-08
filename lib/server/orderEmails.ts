@@ -14,9 +14,10 @@ function publicBaseUrl() {
 }
 
 async function reserveDelivery(orderId: string, kind: EmailKind, recipient: string) {
-  const { data: existing } = await supabaseAdmin.from('order_email_deliveries').select('id,status').eq('order_id', orderId).eq('email_kind', kind).maybeSingle();
-  if (existing?.status === 'sent' || existing?.status === 'sending') return null;
-  if (existing?.status === 'failed') {
+  const { data: existing } = await supabaseAdmin.from('order_email_deliveries').select('id,status,updated_at').eq('order_id', orderId).eq('email_kind', kind).maybeSingle();
+  const staleSending = existing?.status === 'sending' && Date.now() - new Date(existing.updated_at).getTime() > 5 * 60 * 1000;
+  if (existing?.status === 'sent' || (existing?.status === 'sending' && !staleSending)) return null;
+  if (existing?.status === 'failed' || staleSending) {
     const { data, error } = await supabaseAdmin.from('order_email_deliveries').update({ status: 'sending', recipient, error_message: null, updated_at: new Date().toISOString() }).eq('id', existing.id).select('id').single();
     if (error) throw error;
     return data.id as string;
