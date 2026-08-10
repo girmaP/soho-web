@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run build",
-    "preflight": "node scripts/preflight.mjs"
+    "preflight": "node scripts/preflight.mjs",
+    "verify:webhook": "node scripts/verify-webhook-event.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.5",

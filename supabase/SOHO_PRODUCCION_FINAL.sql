@@ -280,6 +280,118 @@ end $$;
 revoke all on function public.claim_stripe_webhook_event(text,text) from public;
 grant execute on function public.claim_stripe_webhook_event(text,text) to service_role;
 
+-- Diagnostico de produccion seguro. Comprueba el contrato que usa la aplicacion
+-- y realiza una escritura temporal sin crear ni modificar pedidos o catalogo.
+create or replace function public.production_preflight()
+returns jsonb
+language plpgsql security definer set search_path=public
+as $$
+declare
+  missing text[] := '{}';
+  required_table text;
+  required_column text;
+  required_field text;
+  required_rpc text;
+  test_event_id text := 'preflight_' || gen_random_uuid()::text;
+  first_claim boolean;
+  duplicate_claim boolean;
+  retry_claim boolean;
+begin
+  foreach required_table in array array[
+    'categories','products','admin_users','orders','order_items','order_events',
+    'stripe_webhook_events','order_email_deliveries','business_settings','contact_messages'
+  ] loop
+    if to_regclass('public.' || required_table) is null then
+      missing := array_append(missing,'table:' || required_table);
+    end if;
+  end loop;
+
+  foreach required_column in array array[
+    'id','customer_name','customer_phone','customer_email','order_type','delivery_address','notes',
+    'status','payment_status','payment_method','stripe_session_id','stripe_payment_intent_id',
+    'stripe_refund_id','checkout_attempt_id','cancellation_reason','refund_reason','order_token',
+    'accepted_at','preparing_at','ready_at','delivered_at','paid_at','cancelled_at','refunded_at',
+    'received_acknowledged_at','received_acknowledged_by','estimated_time','total_price',
+    'refunded_amount','stripe_fee_amount','archived_at','created_at','updated_at'
+  ] loop
+    if not exists(
+      select 1 from information_schema.columns
+      where table_schema='public' and table_name='orders' and column_name=required_column
+    ) then missing := array_append(missing,'orders.' || required_column); end if;
+  end loop;
+
+  foreach required_field in array array[
+    'categories.id','categories.name','categories.sort_order','categories.created_at',
+    'products.id','products.name','products.description','products.price','products.category_id',
+    'products.image_url','products.available','products.estimated_time_category','products.recommended','products.vat_rate','products.created_at',
+    'admin_users.user_id','admin_users.created_at',
+    'order_events.id','order_events.order_id','order_events.event_type','order_events.actor_type',
+    'order_events.actor_id','order_events.from_status','order_events.to_status','order_events.stripe_event_id','order_events.metadata','order_events.created_at',
+    'stripe_webhook_events.event_id','stripe_webhook_events.event_type','stripe_webhook_events.status',
+    'stripe_webhook_events.error_message','stripe_webhook_events.created_at','stripe_webhook_events.processed_at',
+    'order_email_deliveries.id','order_email_deliveries.order_id','order_email_deliveries.email_kind',
+    'order_email_deliveries.recipient','order_email_deliveries.status','order_email_deliveries.error_message',
+    'order_email_deliveries.sent_at','order_email_deliveries.created_at','order_email_deliveries.updated_at',
+    'business_settings.id','business_settings.opening_time','business_settings.closing_time','business_settings.manual_pause',
+    'business_settings.closed_days','business_settings.minimum_order','business_settings.weekly_hours','business_settings.service_start_date',
+    'business_settings.printer_price_per_ticket','business_settings.monthly_management_fee','business_settings.monthly_hosting_fee',
+    'business_settings.annual_domain_fee','business_settings.fiscal_name','business_settings.fiscal_nif','business_settings.fiscal_address',
+    'business_settings.admin_email','business_settings.updated_at',
+    'contact_messages.id','contact_messages.name','contact_messages.email','contact_messages.phone',
+    'contact_messages.message','contact_messages.read','contact_messages.read_at','contact_messages.created_at','contact_messages.updated_at'
+  ] loop
+    if not exists(
+      select 1 from information_schema.columns
+      where table_schema='public'
+        and table_name=split_part(required_field,'.',1)
+        and column_name=split_part(required_field,'.',2)
+    ) then missing := array_append(missing,required_field); end if;
+  end loop;
+
+  foreach required_rpc in array array[
+    'public.claim_stripe_webhook_event(text,text)',
+    'public.production_preflight()',
+    'public.is_admin()',
+    'public.submit_contact_message(text,text,text,text)',
+    'public.cleanup_read_contact_messages_older_than_15_days()'
+  ] loop
+    if to_regprocedure(required_rpc) is null then
+      missing := array_append(missing,'rpc:' || required_rpc);
+    end if;
+  end loop;
+
+  foreach required_column in array array[
+    'id','order_id','product_id','product_name','quantity','unit_price','total_price','vat_rate','customizations'
+  ] loop
+    if not exists(
+      select 1 from information_schema.columns
+      where table_schema='public' and table_name='order_items' and column_name=required_column
+    ) then missing := array_append(missing,'order_items.' || required_column); end if;
+  end loop;
+
+  if cardinality(missing) > 0 then
+    return jsonb_build_object('ok',false,'missing',to_jsonb(missing),'write_ok',false,'claim_ok',false);
+  end if;
+
+  first_claim := public.claim_stripe_webhook_event(test_event_id,'preflight.test');
+  duplicate_claim := public.claim_stripe_webhook_event(test_event_id,'preflight.test');
+  update public.stripe_webhook_events set status='failed' where event_id=test_event_id;
+  retry_claim := public.claim_stripe_webhook_event(test_event_id,'preflight.test');
+  delete from public.stripe_webhook_events where event_id=test_event_id;
+
+  return jsonb_build_object(
+    'ok',first_claim and not duplicate_claim and retry_claim,
+    'missing','[]'::jsonb,
+    'write_ok',true,
+    'claim_ok',first_claim and not duplicate_claim and retry_claim
+  );
+exception when others then
+  delete from public.stripe_webhook_events where event_id=test_event_id;
+  return jsonb_build_object('ok',false,'missing',to_jsonb(missing),'write_ok',false,'claim_ok',false,'error',sqlstate);
+end $$;
+revoke all on function public.production_preflight() from public;
+grant execute on function public.production_preflight() to service_role;
+
 -- Seguridad ------------------------------------------------------------------
 create or replace function public.is_admin()
 returns boolean
