@@ -139,7 +139,6 @@ export default function MenuPage() {
           <h1 className="mt-1 text-4xl font-black">Elige tu pedido</h1>
           <p className="mt-2 max-w-2xl text-neutral-600">Añade productos al carrito y paga online para recoger. Para domicilio, usa el acceso directo a Caylu.</p>
         </div>
-        <span className="rounded-full bg-white px-4 py-2 text-sm font-black shadow-sm ring-1 ring-black/5">{visible.length} de {products.length} productos</span>
       </div>
 
       <div className={`mt-5 rounded-3xl p-4 text-sm font-bold ${isBusinessOpenFromSettings(settings) ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
