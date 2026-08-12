@@ -37,6 +37,7 @@ export default function MenuPage() {
   const [selectedChoice, setSelectedChoice] = useState('');
   const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({});
   const [customizationError, setCustomizationError] = useState('');
+  const [cartNotice, setCartNotice] = useState('');
 
   const categories = useMemo(() => ['Todos', ...Array.from(new Set(products.map((p) => p.categories?.name || 'Otros')))], [products]);
   const visible = useMemo(() => {
@@ -109,6 +110,7 @@ export default function MenuPage() {
           selected_extras: selectedExtras
         }];
     saveCart(next);
+    setCartNotice(`${product.name} añadido al pedido.`);
   }
 
   function confirmCustomization() {
@@ -165,11 +167,17 @@ export default function MenuPage() {
 
       {productsLoading && <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-5" aria-busy="true" aria-label="Cargando productos">{Array.from({ length: 9 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-[2rem] bg-white shadow-sm ring-1 ring-black/5" />)}</div>}
 
-      <div className="mt-6 grid gap-3 rounded-[2rem] border bg-white p-4 shadow-sm md:grid-cols-[1fr_260px]">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar producto, ingrediente o descripción..." className="min-h-12 rounded-2xl border bg-white px-4 font-semibold outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" />
-        <select value={activeCategory} onChange={(e) => setActiveCategory(e.target.value)} className="min-h-12 rounded-2xl border bg-white px-4 font-bold outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100">
-          {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
+      <div className="mt-6 grid min-w-0 gap-3 overflow-hidden rounded-[2rem] border bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_minmax(0,260px)]">
+        <label className="grid min-w-0 gap-1.5 text-xs font-black text-neutral-600">
+          <span>Buscar en la carta</span>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Producto, ingrediente o descripción..." className="min-h-12 w-full min-w-0 max-w-full box-border rounded-2xl border bg-white px-4 font-semibold outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" />
+        </label>
+        <label className="grid min-w-0 gap-1.5 text-xs font-black text-neutral-600">
+          <span>Categoría</span>
+          <select value={activeCategory} onChange={(e) => setActiveCategory(e.target.value)} className="min-h-12 w-full min-w-0 max-w-full box-border rounded-2xl border bg-white px-4 font-bold outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100">
+            {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+          </select>
+        </label>
       </div>
 
       <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-5">
@@ -182,6 +190,9 @@ export default function MenuPage() {
       {!products.length && <p className="mt-10 rounded-3xl bg-white p-6">La carta no está disponible en este momento. Inténtalo de nuevo en unos minutos.</p>}
       {!!products.length && !visible.length && <p className="mt-10 rounded-3xl bg-white p-6">No hay productos que coincidan con esa búsqueda o categoría.</p>}
       <CartBar />
+      <div className="pointer-events-none fixed left-1/2 top-24 z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2" aria-live="polite" aria-atomic="true">
+        {cartNotice && <div className="animate-soho-notice rounded-2xl bg-neutral-950 px-5 py-3 text-center text-sm font-bold text-white shadow-xl" onAnimationEnd={() => setCartNotice('')}>{cartNotice}</div>}
+      </div>
 
       {customizing && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="customization-title">

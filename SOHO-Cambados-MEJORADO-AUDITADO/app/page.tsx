@@ -57,11 +57,8 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/25" />
         <div className="relative mx-auto flex min-h-[calc(100vh-68px)] max-w-7xl items-center px-4 py-16">
           <div className="max-w-4xl">
-            <p className="mb-5 inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-black uppercase tracking-[0.26em] text-white shadow-lg backdrop-blur">
-              Carta online · Recogida en local · Delivery con Caylu
-            </p>
             <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-tight text-white md:text-7xl lg:text-8xl">
-              Pide en SOHO Cambados sin llamar.
+              Pide en SOHO en un clic.
             </h1>
             <p className="mt-7 max-w-2xl text-lg font-semibold leading-8 text-white/90 md:text-xl">
               Consulta la carta, prepara tu pedido para recoger y sigue el estado en tiempo real. Para domicilio, accede directamente al perfil de SOHO en Caylu.

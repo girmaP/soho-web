@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+body { background: #fff7ed; color: #171717; }
+button, input, textarea, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+
+@keyframes soho-notice {
+  0% { opacity: 0; transform: translateY(-8px) scale(.98); }
+  12%, 78% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(.99); }
+}
+
+.animate-soho-notice { animation: soho-notice 2.4s ease both; }
+
+@keyframes soho-loading {
+  0% { transform: translateX(-120%); }
+  50% { transform: translateX(100%); }
+  100% { transform: translateX(220%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

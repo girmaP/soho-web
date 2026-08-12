@@ -27,10 +27,10 @@ export function ProductCard({
   const customizable = extras.length > 0 || requiredChoices.length > 0;
 
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-white shadow-sm sm:rounded-3xl">
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#049ca5]/30 hover:shadow-lg focus-within:border-[#049ca5]/50 focus-within:shadow-lg sm:rounded-3xl">
       <div className="aspect-[4/3] bg-neutral-100">
         {product.image_url ? (
-          <img src={product.image_url} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+          <img src={product.image_url} alt={product.name} loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.025]" />
         ) : (
           <div className="flex h-full items-center justify-center px-2 text-center text-[10px] font-bold text-neutral-400 sm:text-xs">Sin foto</div>
         )}
@@ -46,14 +46,8 @@ export function ProductCard({
             Elección obligatoria: {requiredChoices.join(' o ')}.
           </p>
         )}
-        {extras.length > 0 && (
-          <p className="mt-2 hidden text-xs leading-5 text-neutral-500 lg:block">
-            <strong className="text-neutral-700">Extras disponibles:</strong>{' '}
-            {extras.map((extra) => `${extra.name} (${extra.price === 0 ? 'sin suplemento' : `+${formatPrice(extra.price)}`})`).join(', ')}.
-          </p>
-        )}
-        <button onClick={onAdd} className="mt-auto pt-3">
-          <span className="flex min-h-9 w-full items-center justify-center rounded-xl bg-[#049ca5] px-2 text-[10px] font-black leading-tight text-white transition hover:bg-[#037f86] sm:min-h-11 sm:rounded-2xl sm:px-3 sm:text-sm">
+        <button onClick={onAdd} className="mt-auto rounded-xl pt-3 outline-none focus-visible:ring-4 focus-visible:ring-cyan-200 sm:rounded-2xl">
+          <span className="flex min-h-9 w-full items-center justify-center rounded-xl bg-[#049ca5] px-2 text-[10px] font-black leading-tight text-white transition duration-200 hover:bg-[#037f86] active:scale-[0.98] sm:min-h-11 sm:rounded-2xl sm:px-3 sm:text-sm">
             <span className="sm:hidden">{customizable ? 'Elegir' : 'Añadir'}</span>
             <span className="hidden sm:inline">{customizable ? 'Personalizar y añadir' : 'Añadir al pedido'}</span>
           </span>
