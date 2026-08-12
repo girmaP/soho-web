@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!data) {
     return NextResponse.json({ ok: false, error: 'Pedido no encontrado.' }, { status: 404 });
   }
-  if (!['authorized', 'paid', 'refund_pending', 'refunded'].includes(data.payment_status)) {
+  if (!['authorized', 'paid', 'refund_pending','cancelled', 'refunded'].includes(data.payment_status)) {
     return NextResponse.json({ ok: false, code: 'ORDER_CONFIRMING', error: 'Estamos confirmando el pago del pedido.' }, { status: 409 });
   }
 
