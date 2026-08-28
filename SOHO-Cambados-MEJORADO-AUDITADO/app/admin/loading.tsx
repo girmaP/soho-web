@@ -1,3 +1,0 @@
-export default function AdminLoading() {
-  return <main className="min-h-screen bg-slate-100 p-5" aria-busy="true"><div className="mx-auto max-w-7xl animate-pulse"><div className="h-16 rounded-3xl bg-white"/><div className="mt-5 grid gap-5 lg:grid-cols-[240px_1fr]"><div className="h-[70vh] rounded-3xl bg-neutral-900"/><div className="space-y-5"><div className="h-24 rounded-3xl bg-white"/><div className="grid gap-4 md:grid-cols-3"><div className="h-32 rounded-3xl bg-white"/><div className="h-32 rounded-3xl bg-white"/><div className="h-32 rounded-3xl bg-white"/></div><div className="h-80 rounded-3xl bg-white"/></div></div></div></main>;
-}
