@@ -1,6 +1,6 @@
 # SOHO Cambados · Producción
 
-Aplicación de pedidos online de SOHO Cambados. Incluye carta, carrito, checkout Stripe con autorización y captura manual, seguimiento privado, panel administrativo, alertas de nuevos pedidos, correo transaccional mediante Gmail, estadísticas e informe PDF.
+Aplicación de pedidos online de SOHO Cambados. Incluye carta, carrito, cobro seguro con Stripe, aceptación y estados automáticos, seguimiento privado, panel administrativo, alertas, correo transaccional mediante Gmail, estadísticas e informe PDF.
 
 ## Puesta en producción
 
@@ -11,7 +11,7 @@ Aplicación de pedidos online de SOHO Cambados. Incluye carta, carrito, checkout
 
 ## Flujo de pago
 
-Stripe autoriza el importe al completar Checkout. El pedido solo se muestra al equipo una vez autorizada la operación. Al pasar el pedido a **En preparación**, la aplicación captura el importe. Si se cancela antes de la captura, se libera la autorización.
+Stripe cobra el importe al completar Checkout. El pedido aparece como **Aceptado**, pasa a **Preparando** al minuto 2 y a **Listo** al minuto 10 desde el pago (el tiempo total es configurable). **Entregado**, cancelaciones y reembolsos son manuales. Existe reconciliación segura desde el retorno de Stripe y el seguimiento si el webhook se retrasa.
 
 ## Seguridad
 

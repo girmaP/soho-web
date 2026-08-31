@@ -82,8 +82,8 @@ export function AdminOrderCard({
   const [customCancelReason, setCustomCancelReason] = useState(selectedCancelReason.message);
 
   const whatsappMessage = encodeURIComponent(
-    `Hola ${order.customer_name}, tu pedido en SOHO Cambados ha sido aceptado. Tiempo estimado: ${
-      order.estimated_time || '20'
+    `Hola ${order.customer_name}, te escribimos de SOHO Cambados sobre tu pedido. El tiempo estimado de preparación es de ${
+      order.estimated_time || '30'
     } minutos. Gracias.`
   );
   const whatsappUrl = `https://wa.me/${cleanPhone(order.customer_phone || '')}?text=${whatsappMessage}`;
@@ -120,6 +120,7 @@ export function AdminOrderCard({
             <span className={`rounded-full border px-3 py-1 text-xs font-black ${stateStyles[order.status] || stateStyles.pending}`}>
               {stateLabels[order.status] || order.status}
             </span>
+            {order.automatic_status && <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black text-[#036b71]">Actualizado automáticamente</span>}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-neutral-600">
             <span>{order.customer_phone}</span>

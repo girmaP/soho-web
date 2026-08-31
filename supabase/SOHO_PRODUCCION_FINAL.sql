@@ -139,6 +139,7 @@ create table if not exists public.business_settings (
   manual_pause boolean not null default false,
   closed_days integer[] not null default '{}',
   minimum_order numeric(10,2) not null default 0,
+  default_wait_minutes integer not null default 10 check (default_wait_minutes between 5 and 180),
   weekly_hours jsonb not null default '{"1":{"open":"09:00","close":"23:30","closed":false},"2":{"open":"09:00","close":"23:30","closed":false},"3":{"open":"09:00","close":"23:30","closed":false},"4":{"open":"09:00","close":"23:30","closed":false},"5":{"open":"09:00","close":"00:30","closed":false},"6":{"open":"09:00","close":"00:30","closed":false},"0":{"open":"09:00","close":"23:30","closed":false}}'::jsonb,
   service_start_date date,
   printer_price_per_ticket numeric(10,4) not null default 0,
@@ -190,6 +191,7 @@ alter table public.orders add column if not exists stripe_fee_amount numeric(10,
 alter table public.orders add column if not exists archived_at timestamptz;
 
 alter table public.business_settings add column if not exists minimum_order numeric(10,2) not null default 0;
+alter table public.business_settings add column if not exists default_wait_minutes integer not null default 10;
 alter table public.business_settings add column if not exists service_start_date date;
 alter table public.business_settings add column if not exists printer_price_per_ticket numeric(10,4) not null default 0;
 alter table public.business_settings add column if not exists monthly_management_fee numeric(10,2) not null default 0;
@@ -334,6 +336,7 @@ begin
     'order_email_deliveries.sent_at','order_email_deliveries.created_at','order_email_deliveries.updated_at',
     'business_settings.id','business_settings.opening_time','business_settings.closing_time','business_settings.manual_pause',
     'business_settings.closed_days','business_settings.minimum_order','business_settings.weekly_hours','business_settings.service_start_date',
+    'business_settings.default_wait_minutes',
     'business_settings.printer_price_per_ticket','business_settings.monthly_management_fee','business_settings.monthly_hosting_fee',
     'business_settings.annual_domain_fee','business_settings.fiscal_name','business_settings.fiscal_nif','business_settings.fiscal_address',
     'business_settings.admin_email','business_settings.updated_at',

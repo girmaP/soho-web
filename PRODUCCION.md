@@ -5,7 +5,8 @@
 - [ ] Variables LIVE configuradas en Vercel.
 - [ ] Webhook Stripe LIVE activo en `/api/stripe/webhook`.
 - [ ] Dominio `https://www.sohocambados.es` asignado al proyecto.
-- [ ] Realizar un pedido real controlado y verificar: autorización, aparición en admin, correo, seguimiento, captura al preparar y cambio a listo.
+- [ ] Ejecutar `supabase/20260831_TIEMPO_AUTOMATICO_PEDIDOS.sql` una sola vez.
+- [ ] Realizar un pedido controlado y verificar: cobro, aparición en admin como Preparando, correo, seguimiento y cambio automático a Listo.
 - [ ] Verificar cancelación antes de captura y un reembolso controlado.
 - [ ] Confirmar PDF e informe de actividad.
 
@@ -15,7 +16,7 @@ El archivo `.env.local` no se versiona y no debe subirse a GitHub.
 
 Los intentos se guardan inicialmente con `payment_status=pending`, pero no son
 pedidos operativos: Admin y el seguimiento privado solo los muestran tras una
-autorizacion confirmada por Stripe. El webhook valida estado, importe, moneda,
+confirmación de pago de Stripe. El webhook valida estado, importe, moneda,
 sesion y pedido antes de activar la fila.
 
 La incidencia se producia porque `stripe_webhook_events` trataba un evento

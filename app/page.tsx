@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Clock3, ListOrdered, MapPin, Navigation, Phone, Send, UserRound } from 'lucide-react';
@@ -13,6 +13,13 @@ export default function HomePage() {
   const [contact, setContact] = useState({ name: '', email: '', phone: '', message: '' });
   const [contactStatus, setContactStatus] = useState('');
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery') && hash.includes('access_token=')) {
+      window.location.replace(`/admin/reset-password${hash}`);
+    }
+  }, []);
 
   async function submitContact(e: React.FormEvent) {
     e.preventDefault();

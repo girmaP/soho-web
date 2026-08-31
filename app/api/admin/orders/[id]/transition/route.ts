@@ -5,6 +5,7 @@ import { appendOrderEvent } from '@/lib/server/orderEvents';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { assertStripeConfiguration, stripe } from '@/lib/stripe';
 import { sendOrderEmail } from '@/lib/server/orderEmails';
+import { automaticPreparingAt, automaticReadyAt, effectiveOrderStatus } from '@/lib/orderAutomation';
 
 const schema = z.object({
   status: z.enum(['pending', 'accepted', 'preparing', 'ready', 'delivered', 'cancelled']),
@@ -33,7 +34,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!order) return NextResponse.json({ ok: false, error: 'Pedido no encontrado.' }, { status: 404 });
 
     const next = parsed.data.status;
-    if (next !== order.status && !allowedTransitions[order.status]?.includes(next)) {
+    const currentStatus = effectiveOrderStatus(order);
+    if (next !== currentStatus && !allowedTransitions[currentStatus]?.includes(next)) {
       return NextResponse.json({ ok: false, error: 'Ese cambio de estado no esta permitido.' }, { status: 409 });
     }
     if (!['authorized', 'paid', 'refund_pending', 'refunded'].includes(order.payment_status)) {
@@ -48,6 +50,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (next === 'accepted' && !order.accepted_at) update.accepted_at = new Date().toISOString();
     if (next === 'preparing' && !order.preparing_at) update.preparing_at = new Date().toISOString();
     if (next === 'ready' && !order.ready_at) update.ready_at = new Date().toISOString();
+    if (['preparing', 'ready'].includes(currentStatus) && !order.preparing_at) update.preparing_at = automaticPreparingAt(order) || new Date().toISOString();
+    if (currentStatus === 'ready' && !order.ready_at) update.ready_at = automaticReadyAt(order) || new Date().toISOString();
     if (next === 'delivered' && !order.delivered_at) update.delivered_at = new Date().toISOString();
 
     if (next === 'preparing') {
@@ -100,7 +104,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       eventType: `status.${next}`,
       actorType: 'admin',
       actorId: admin.id,
-      fromStatus: order.status,
+      fromStatus: currentStatus,
       toStatus: next,
       metadata: { estimatedTime: parsed.data.estimatedTime ?? null, paymentStatus: updated.payment_status }
     });

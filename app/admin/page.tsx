@@ -12,6 +12,7 @@ import { BusinessSettings, businessHoursLabelFromSettings, defaultBusinessSettin
 import { RangeSelector } from '@/components/RangeSelector';
 import { DashboardAnalysis, DateRange, aggregateOrders, buildDashboardAnalytics, filterOrdersByRange, presetRange } from '@/lib/reporting';
 import { isHiddenCatalogCategory, resolvedProductImage } from '@/lib/catalogPresentation';
+import { withEffectiveOrderStatus } from '@/lib/orderAutomation';
 
 type AdminSection = 'dashboard' | 'orders' | 'messages' | 'day' | 'history' | 'products' | 'settings';
 type StatusFilter = 'all' | 'pending' | 'accepted' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
@@ -327,7 +328,7 @@ export default function AdminPage() {
       .limit(10000);
 
     if (error) console.error(error);
-    const list = data || [];
+    const list = (data || []).map((order: any) => withEffectiveOrderStatus(order));
     list.forEach((order: any) => knownOrderIdsRef.current.add(order.id));
     setOrders(list);
   }
@@ -402,6 +403,7 @@ export default function AdminPage() {
         closed_days: orderedDays.filter((d) => settings.weekly_hours?.[d.key]?.closed).map((d) => d.day),
         weekly_hours: settings.weekly_hours,
         minimum_order: settings.minimum_order,
+        default_wait_minutes: settings.default_wait_minutes,
         service_start_date: settings.service_start_date || null,
         printer_price_per_ticket: settings.printer_price_per_ticket,
         monthly_management_fee: settings.monthly_management_fee,
@@ -431,25 +433,7 @@ export default function AdminPage() {
   }
 
 
-  async function sendWhatsAppAuto(order: any, nextStatus: string, nextTime?: number | null) {
-    if (!['accepted', 'ready'].includes(nextStatus)) return;
-    try {
-      const { data: authData } = await supabase.auth.getSession();
-      const accessToken = authData.session?.access_token;
-      if (!accessToken) return;
-      await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ orderId: order.id, status: nextStatus, estimatedTime: nextTime ?? null })
-      });
-    } catch (error) {
-      console.warn('WhatsApp automático no configurado o no disponible:', error);
-    }
-  }
-
-
   async function updateOrder(id: string, status: string, estimatedTime?: number | null, cancellationReason?: string | null) {
-    const currentOrder = orders.find((order) => order.id === id);
     const { data: authData } = await supabase.auth.getSession();
     const accessToken = authData.session?.access_token;
     if (!accessToken) {
@@ -472,7 +456,6 @@ export default function AdminPage() {
       alert(result?.error || 'No se pudo actualizar el pedido.');
       return;
     }
-    if (currentOrder) await sendWhatsAppAuto(currentOrder, status, estimatedTime);
     await loadOrders();
   }
 
@@ -588,6 +571,14 @@ export default function AdminPage() {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    const timer = window.setInterval(() => {
+      setOrders((current) => current.map((order) => withEffectiveOrderStatus(order)));
+    }, 15_000);
+    return () => window.clearInterval(timer);
   }, [session]);
 
   const todayOrders = useMemo(() => {
@@ -1114,6 +1105,17 @@ Somos el equipo de SOHO Cambados. Te escribimos en respuesta al mensaje que nos 
                   <input type="checkbox" checked={settings.manual_pause} onChange={(e) => setSettings({ ...settings, manual_pause: e.target.checked })} className="h-6 w-6" />
                 </label>
 
+                <div className="mt-5 rounded-[28px] border border-cyan-200 bg-cyan-50 p-6">
+                  <h2 className="text-2xl font-black text-neutral-950">Operación automática</h2>
+                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-neutral-700">Los pedidos pagados aparecen primero como «Aceptado», pasan a «Preparando» al minuto 2 y a «Listo» cuando se cumple el tiempo total indicado. «Entregado», cancelaciones y reembolsos se gestionan manualmente.</p>
+                  <label className="mt-5 grid max-w-md gap-2 rounded-3xl bg-white p-5 text-sm font-black text-neutral-950">
+                    Minutos totales hasta «Listo»
+                    <select value={settings.default_wait_minutes} onChange={(e) => setSettings({ ...settings, default_wait_minutes: Number(e.target.value) })} className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-bold">
+                      {[10, 15, 20, 30, 45, 60].map((minutes) => <option key={minutes} value={minutes}>{minutes} minutos</option>)}
+                    </select>
+                  </label>
+                </div>
+
                 <div className="mt-5 grid gap-4">
                   {orderedDays.map((item) => {
                     const daySettings = settings.weekly_hours?.[item.key];
@@ -1157,7 +1159,7 @@ Somos el equipo de SOHO Cambados. Te escribimos en respuesta al mensaje que nos 
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-3">
-                  <button onClick={saveSettings} disabled={savingSettings} className="rounded-2xl bg-neutral-950 px-6 py-3 text-sm font-black text-white disabled:opacity-60">{savingSettings ? 'Guardando...' : 'Guardar horario'}</button>
+                  <button onClick={saveSettings} disabled={savingSettings} className="rounded-2xl bg-neutral-950 px-6 py-3 text-sm font-black text-white disabled:opacity-60">{savingSettings ? 'Guardando...' : 'Guardar configuración'}</button>
                   <button onClick={loadSettings} className="rounded-2xl border border-black/10 bg-white px-6 py-3 text-sm font-black text-neutral-950">Descartar cambios</button>
                 </div>
               </div>

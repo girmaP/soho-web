@@ -34,10 +34,11 @@ export default function Page() {
         </h2>
 
         <p className="mt-2 text-neutral-700">
-          Stripe realizará una autorización temporal. El cobro se completa
-          cuando SOHO marca el pedido como “En preparación”. Si el pedido se
-          rechaza antes de ese momento, la autorización se libera sin cargo
-          definitivo.
+          Stripe procesa el pago de forma segura. Cuando el pago se confirma,
+          el pedido aparece como aceptado y sus estados avanzan automáticamente
+          según el tiempo mostrado. Si se
+          produce una incidencia después del cobro, SOHO podrá gestionar el
+          reembolso correspondiente.
         </p>
 
         <h2 className="mt-6 text-xl font-black">

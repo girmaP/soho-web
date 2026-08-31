@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { appendOrderEvent } from '@/lib/server/orderEvents';
 import { sendOrderEmail } from '@/lib/server/orderEmails';
+import { activatePaidOrder } from '@/lib/server/automaticOrders';
 
 async function findOrderIdByPaymentIntent(paymentIntentId?: string | null) {
   if (!paymentIntentId) return null;
@@ -13,7 +14,7 @@ async function findOrderIdByPaymentIntent(paymentIntentId?: string | null) {
 }
 
 async function registerAuthorization(orderId: string, paymentIntent: Stripe.PaymentIntent, eventId: string, sessionId?: string) {
-  if (!['requires_capture', 'succeeded'].includes(paymentIntent.status)) {
+  if (paymentIntent.status !== 'requires_capture') {
     throw new Error(`PaymentIntent ${paymentIntent.id} no esta autorizado.`);
   }
   const { data: order, error: orderError } = await supabaseAdmin
@@ -29,10 +30,10 @@ async function registerAuthorization(orderId: string, paymentIntent: Stripe.Paym
   const now = new Date().toISOString();
   const { data: activated, error } = await supabaseAdmin.from('orders').update({
     status: 'pending',
-    payment_status: paymentIntent.status === 'succeeded' ? 'paid' : 'authorized',
+    payment_status: 'authorized',
     stripe_payment_intent_id: paymentIntent.id,
     stripe_session_id: sessionId || order.stripe_session_id,
-    paid_at: paymentIntent.status === 'succeeded' ? now : null,
+    paid_at: null,
     updated_at: now
   }).eq('id', orderId).in('payment_status', ['pending', 'failed']).select('id').maybeSingle();
   if (error) throw error;
@@ -55,22 +56,10 @@ async function registerAuthorization(orderId: string, paymentIntent: Stripe.Paym
   if (!email.ok && !email.skipped) throw new Error('No se pudo enviar el correo de confirmacion.');
 }
 
-async function registerPaymentSucceeded(paymentIntent: Stripe.PaymentIntent, eventId: string) {
-  const orderId = paymentIntent.metadata?.order_id || await findOrderIdByPaymentIntent(paymentIntent.id);
+async function registerPaymentSucceeded(paymentIntent: Stripe.PaymentIntent, eventId: string, knownOrderId?: string, sessionId?: string) {
+  const orderId = knownOrderId || paymentIntent.metadata?.order_id || await findOrderIdByPaymentIntent(paymentIntent.id);
   if (!orderId) return;
-  const { data: order, error } = await supabaseAdmin.from('orders').select('id,payment_status,paid_at').eq('id', orderId).maybeSingle();
-  if (error) throw error;
-  if (!order || order.payment_status === 'refunded' || order.payment_status === 'refund_pending') return;
-  if (order.payment_status !== 'paid') {
-    const { error: updateError } = await supabaseAdmin.from('orders').update({
-      payment_status: 'paid',
-      stripe_payment_intent_id: paymentIntent.id,
-      paid_at: order.paid_at || new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }).eq('id', orderId);
-    if (updateError) throw updateError;
-    await appendOrderEvent({ orderId, eventType: 'payment.succeeded', actorType: 'stripe', stripeEventId: eventId, metadata: { paymentIntentId: paymentIntent.id } });
-  }
+  await activatePaidOrder({ orderId, paymentIntent, sessionId, eventId, source: 'stripe_webhook' });
 }
 
 async function registerPaymentFailed(paymentIntent: Stripe.PaymentIntent, eventId: string) {
@@ -180,7 +169,11 @@ export async function POST(request: Request) {
         ? await stripe.paymentIntents.retrieve(session.payment_intent)
         : session.payment_intent;
       if (!paymentIntent || paymentIntent.id !== paymentIntentId) throw new Error('PaymentIntent no disponible.');
-      await registerAuthorization(orderId, paymentIntent, event.id, session.id);
+      if (paymentIntent.status === 'succeeded') {
+        await registerPaymentSucceeded(paymentIntent, event.id, orderId, session.id);
+      } else if (paymentIntent.status === 'requires_capture') {
+        await registerAuthorization(orderId, paymentIntent, event.id, session.id);
+      }
     } else if (event.type === 'payment_intent.amount_capturable_updated') {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
       const orderId = paymentIntent.metadata?.order_id;

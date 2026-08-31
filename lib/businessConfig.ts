@@ -11,6 +11,7 @@ export type BusinessSettings = {
   closed_days: number[];
   weekly_hours: WeeklyHours;
   minimum_order: number;
+  default_wait_minutes: number;
   service_start_date: string | null;
   printer_price_per_ticket: number;
   monthly_management_fee: number;
@@ -37,7 +38,7 @@ export const defaultWeeklyHours: WeeklyHours = {
 };
 export const defaultBusinessSettings: BusinessSettings = {
   id: 'main', opening_time: '09:00', closing_time: '01:00', manual_pause: false, closed_days: [],
-  weekly_hours: defaultWeeklyHours, minimum_order: 0, service_start_date: null, printer_price_per_ticket: 0,
+  weekly_hours: defaultWeeklyHours, minimum_order: 0, default_wait_minutes: 10, service_start_date: null, printer_price_per_ticket: 0,
   monthly_management_fee: 0, monthly_hosting_fee: 0, annual_domain_fee: 0,
   fiscal_name: 'SOHO Cambados', fiscal_nif: '', fiscal_address: 'Calle A Mariña, 3, 36630 Cambados, Pontevedra', admin_email: 'sohocambados@gmail.com'
 };
@@ -80,7 +81,9 @@ export async function getBusinessSettings(): Promise<BusinessSettings> {
     opening_time: validTime(data.opening_time, defaultBusinessSettings.opening_time),
     closing_time: validTime(data.closing_time, defaultBusinessSettings.closing_time),
     manual_pause: Boolean(data.manual_pause), closed_days: Array.isArray(data.closed_days) ? data.closed_days : [],
-    minimum_order: Number(data.minimum_order || 0), printer_price_per_ticket: Number(data.printer_price_per_ticket || 0),
+    minimum_order: Number(data.minimum_order || 0),
+    default_wait_minutes: Math.min(180, Math.max(5, Number(data.default_wait_minutes || 10))),
+    printer_price_per_ticket: Number(data.printer_price_per_ticket || 0),
     monthly_management_fee: Number(data.monthly_management_fee || 0), monthly_hosting_fee: Number(data.monthly_hosting_fee || 0),
     annual_domain_fee: Number(data.annual_domain_fee || 0)
   } as BusinessSettings;

@@ -171,7 +171,6 @@ export async function POST(request: Request) {
       customer_email: body.customerEmail.toLowerCase(),
       phone_number_collection: { enabled: false },
       payment_intent_data: {
-        capture_method: 'manual',
         receipt_email: body.customerEmail.toLowerCase(),
         metadata: { order_id: order.id }
       },

@@ -30,9 +30,9 @@ const stateLabels: Record<string, string> = {
 };
 
 const steps = [
-  { key: 'pending', label: 'Enviado', text: 'SOHO ha recibido tu pedido.' },
-  { key: 'accepted', label: 'Aceptado', text: 'El equipo confirmó el pedido.' },
-  { key: 'preparing', label: 'Preparando', text: 'Tu pedido está en cocina.' },
+  { key: 'pending', label: 'Pago', text: 'Estamos confirmando el pago seguro.' },
+  { key: 'accepted', label: 'Confirmado', text: 'Tu pedido se ha aceptado automáticamente.' },
+  { key: 'preparing', label: 'Preparando', text: 'Tu pedido ya está en cocina.' },
   { key: 'ready', label: 'Listo', text: 'Puedes pasar a recogerlo.' },
   { key: 'delivered', label: 'Entregado', text: 'Pedido finalizado.' }
 ];
@@ -45,7 +45,7 @@ function statusMessage(order: any) {
   if (order.status === 'preparing') return `Tu pedido se está preparando${order.estimated_time ? `. Tiempo estimado: ${order.estimated_time} min` : ''}.`;
   if (order.status === 'accepted') return `Pedido aceptado${order.estimated_time ? `. Tiempo estimado: ${order.estimated_time} min` : ''}.`;
   if (order.status === 'delivered') return 'Pedido entregado. Gracias por pedir en SOHO Cambados.';
-  return 'Pedido enviado. SOHO lo revisará y confirmará el tiempo estimado.';
+  return 'Estamos confirmando el pago. Después, los estados del pedido avanzarán automáticamente.';
 }
 
 function OrderStatusContent() {
@@ -131,7 +131,7 @@ function OrderStatusContent() {
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div className="rounded-[2rem] bg-white p-8 shadow-xl shadow-cyan-200/30">
           <h1 className="text-3xl font-black">{confirming ? 'Confirmando tu pedido' : 'Pedido no encontrado'}</h1>
-          {confirming && <p className="mt-2 text-neutral-600">Stripe esta terminando de confirmar la autorizacion. Esta pagina se actualizara automaticamente en unos segundos.</p>}
+          {confirming && <p className="mt-2 text-neutral-600">Stripe está terminando de confirmar el pago. Esta página comprobará automáticamente el estado sin volver a cobrarte.</p>}
           <div className={confirming ? 'hidden' : ''}>
           <p className="mt-2 text-neutral-600">Revisa que estás usando el enlace privado completo del pedido o contacta con SOHO.</p>
           </div>

@@ -39,11 +39,11 @@ async function markDelivery(id: string, status: 'sent' | 'failed', errorMessage?
 
 function emailCopy(kind: EmailKind, order: any) {
   const copies: Record<EmailKind, { subject: string; title: string; intro: string }> = {
-    received: { subject: `Pedido recibido · ${order.reference || order.id.slice(0, 8).toUpperCase()}`, title: 'Hemos recibido tu pedido', intro: 'SOHO revisará ahora la disponibilidad. El importe está autorizado temporalmente y se cobrará cuando empecemos a preparar el pedido.' },
+    received: { subject: `Pedido recibido · ${order.reference || order.id.slice(0, 8).toUpperCase()}`, title: 'Hemos recibido tu pedido', intro: 'El pago se está confirmando de forma segura. Te avisaremos en cuanto el pedido entre en preparación.' },
     accepted: { subject: 'Tu pedido ha sido aceptado', title: 'Pedido aceptado', intro: `SOHO ha aceptado tu pedido${order.estimated_time ? ` y estima unos ${order.estimated_time} minutos` : ''}.` },
     preparing: { subject: 'Tu pedido está en preparación', title: 'Estamos preparando tu pedido', intro: 'El cobro ha sido confirmado y el equipo de SOHO ya está preparando tu pedido.' },
     ready: { subject: 'Tu pedido está listo para recoger', title: 'Ya puedes pasar a recogerlo', intro: `Te esperamos en ${siteConfig.shortAddress}.` },
-    cancelled: { subject: 'Actualización de tu pedido: cancelado', title: 'El pedido no ha podido gestionarse', intro: order.cancellation_reason || 'SOHO ha cancelado el pedido. Si el importe estaba autorizado, la autorización se liberará sin cobro.' },
+    cancelled: { subject: 'Actualización de tu pedido: cancelado', title: 'El pedido no ha podido gestionarse', intro: order.cancellation_reason || 'SOHO ha cancelado el pedido. Si ya estaba cobrado, el equipo gestionará el reembolso correspondiente.' },
     refunded: { subject: 'Reembolso de tu pedido', title: 'Reembolso tramitado', intro: 'La devolución ha sido tramitada. El plazo para verla reflejada depende de tu banco.' }
   };
   return copies[kind];

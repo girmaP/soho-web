@@ -141,7 +141,7 @@ export default function CheckoutPage() {
               <input name="website" className="hidden" tabIndex={-1} autoComplete="off" />
               <div className="rounded-3xl bg-cyan-50 p-4 text-sm leading-6 text-[#02565b]">
                 <strong className="block text-base">Pago online seguro</strong>
-                Stripe autorizará temporalmente el importe. El cobro se realizará cuando SOHO marque el pedido como «En preparación». Si se rechaza antes, la autorización se libera sin cobrar.
+                Al completar el pago, tu pedido aparecerá como aceptado. A los 2 minutos pasará a preparación y estará listo aproximadamente en {settings.default_wait_minutes} minutos desde el pago.
               </div>
               <label className="grid gap-1.5 font-bold">Nombre<input name="customerName" required minLength={2} autoComplete="name" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Tu nombre" /></label>
               <label className="grid gap-1.5 font-bold">Teléfono<input name="customerPhone" required inputMode="tel" autoComplete="tel" pattern="[0-9+() .-]{6,30}" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="600 000 000" /></label>
@@ -180,7 +180,7 @@ export default function CheckoutPage() {
             {!cart.length && <p className="rounded-2xl bg-neutral-50 p-4 text-sm font-semibold text-neutral-600">El carrito está vacío.</p>}
           </div>
           <div className="mt-5 flex justify-between border-t pt-5 text-xl"><b>Total</b><b>{formatPrice(total)}</b></div>
-          <p className="mt-3 text-xs leading-5 text-neutral-500">En recogida, Stripe autoriza el importe y SOHO lo cobra únicamente al iniciar la preparación. En delivery, el pago se completa directamente en Caylu.</p>
+          <p className="mt-3 text-xs leading-5 text-neutral-500">En recogida, Stripe confirma el pago y los estados avanzan automáticamente hasta «Listo». La entrega se marca manualmente. En delivery, el pedido y el pago se gestionan directamente en Caylu.</p>
         </aside>
       </div>
     </main>

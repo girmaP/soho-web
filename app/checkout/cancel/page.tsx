@@ -45,7 +45,7 @@ function CheckoutCancelContent() {
       <section className="rounded-[2rem] bg-white p-8 text-center shadow-xl shadow-cyan-200/30">
         <p className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-amber-100 text-3xl">!</p>
         <h1 className="mt-5 text-4xl font-black">¿Quieres cancelar el pedido?</h1>
-        <p className="mx-auto mt-3 max-w-xl leading-7 text-neutral-600">Los datos de pago todavía no se han confirmado. SOHO no ha recibido el pedido y no se realizará ningún cobro mientras no completes la autorización en Stripe.</p>
+        <p className="mx-auto mt-3 max-w-xl leading-7 text-neutral-600">El pago no se ha completado y el pedido no ha entrado en preparación. Puedes volver a la carta e intentarlo de nuevo cuando quieras.</p>
         {error && <p role="alert" className="mt-5 rounded-2xl bg-red-50 p-4 font-semibold text-red-700">{error}</p>}
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
           <button type="button" disabled={!orderId || !token || Boolean(busy)} onClick={() => act('resume')} className="rounded-2xl bg-[#049ca5] px-5 py-4 font-black text-white disabled:opacity-50">{busy === 'resume' ? 'Abriendo pago…' : 'Seguir con el pago'}</button>
