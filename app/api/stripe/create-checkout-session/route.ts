@@ -5,7 +5,7 @@ import { assertStripeConfiguration, stripe } from '@/lib/stripe';
 import { isBusinessOpenFromSettings, defaultBusinessSettings } from '@/lib/businessConfig';
 import { appendOrderEvent } from '@/lib/server/orderEvents';
 import { isHiddenCatalogCategory, resolvedProductImage } from '@/lib/catalogPresentation';
-import { customizationLabel, extrasForCategory, requiredChoicesFromName, selectedExtrasTotal } from '@/lib/productCustomization';
+import { customizationLabel, extraProfileForCategory, extrasForCategory, requiredChoicesFromName, selectedExtrasTotal } from '@/lib/productCustomization';
 
 const selectedExtraSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -108,6 +108,10 @@ export async function POST(request: Request) {
         }
         return { name: allowed.name, price: allowed.price, quantity: selected.quantity };
       });
+      const normalizedExtraNames = selectedExtras.map((extra) => extra.name.toLocaleLowerCase('es'));
+      if (new Set(normalizedExtraNames).size !== normalizedExtraNames.length) {
+        throw new Error(`Hay extras repetidos para “${product.name}”. Vuelve a personalizar el producto.`);
+      }
 
       const basePrice = Number(product.price);
       const extrasTotal = selectedExtrasTotal(selectedExtras);
@@ -115,6 +119,7 @@ export async function POST(request: Request) {
       const customizations = {
         required_choice: requiredChoices.length ? selectedChoice : null,
         selected_extras: selectedExtras,
+        extra_profile: extraProfileForCategory(categoryName, product.name),
         base_price: basePrice,
         extras_total: extrasTotal
       };

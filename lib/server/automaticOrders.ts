@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { appendOrderEvent } from '@/lib/server/orderEvents';
 import { sendOrderEmail } from '@/lib/server/orderEmails';
+import { enqueueOrderForPrinting } from '@/lib/server/printJobs';
 
 type ActivationSource = 'stripe_webhook' | 'checkout_return' | 'order_tracking';
 
@@ -63,6 +64,12 @@ export async function activatePaidOrder(params: {
       console.error('order_email_dispatch_failed', { orderId, kind: 'accepted', error: emailError?.message })
     );
   }
+
+  // La cola es idempotente (un trabajo por pedido). Un fallo de la impresora
+  // nunca debe revertir ni bloquear un pago confirmado.
+  await enqueueOrderForPrinting(orderId).catch((printError) =>
+    console.error('print_job_enqueue_failed', { orderId, source, error: printError?.message })
+  );
 
   return { activated: !alreadyActive, order: updated };
 }

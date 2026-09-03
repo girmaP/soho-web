@@ -132,6 +132,19 @@ create table if not exists public.order_email_deliveries (
   unique (order_id, email_kind)
 );
 
+create table if not exists public.print_jobs (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null unique references public.orders(id) on delete restrict,
+  status text not null default 'pending' check (status in ('pending','claimed','printed','failed')),
+  attempts integer not null default 0 check (attempts >= 0),
+  worker_id text,
+  claimed_at timestamptz,
+  printed_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.business_settings (
   id text primary key default 'main',
   opening_time text not null default '09:00',
@@ -234,6 +247,8 @@ drop trigger if exists contact_messages_set_updated_at on public.contact_message
 create trigger contact_messages_set_updated_at before update on public.contact_messages for each row execute function public.set_updated_at();
 drop trigger if exists order_email_deliveries_set_updated_at on public.order_email_deliveries;
 create trigger order_email_deliveries_set_updated_at before update on public.order_email_deliveries for each row execute function public.set_updated_at();
+drop trigger if exists print_jobs_set_updated_at on public.print_jobs;
+create trigger print_jobs_set_updated_at before update on public.print_jobs for each row execute function public.set_updated_at();
 
 -- La categoría ya retirada no se ofrece al consumidor.
 update public.products
@@ -252,6 +267,7 @@ create index if not exists orders_unacknowledged_created_idx on public.orders(cr
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
 create index if not exists order_events_order_id_idx on public.order_events(order_id,created_at);
 create index if not exists products_category_id_idx on public.products(category_id);
+create index if not exists print_jobs_pending_idx on public.print_jobs(created_at) where status in ('pending','failed');
 
 insert into public.business_settings(id) values('main') on conflict(id) do nothing;
 update public.business_settings set
@@ -282,6 +298,36 @@ end $$;
 revoke all on function public.claim_stripe_webhook_event(text,text) from public;
 grant execute on function public.claim_stripe_webhook_event(text,text) to service_role;
 
+-- Reserva atomica para el conector local de la impresora. Los trabajos
+-- abandonados durante mas de dos minutos vuelven a estar disponibles.
+create or replace function public.claim_print_jobs(p_worker_id text,p_limit integer default 5)
+returns setof public.print_jobs
+language plpgsql security definer set search_path=public
+as $$
+begin
+  return query
+  with candidates as (
+    select id
+    from public.print_jobs
+    where attempts < 20
+      and (
+        status in ('pending','failed')
+        or (status='claimed' and claimed_at < now() - interval '2 minutes')
+      )
+    order by created_at
+    for update skip locked
+    limit greatest(1,least(coalesce(p_limit,5),20))
+  )
+  update public.print_jobs jobs
+  set status='claimed', worker_id=left(trim(p_worker_id),100), claimed_at=now(),
+      attempts=jobs.attempts+1, last_error=null, updated_at=now()
+  from candidates
+  where jobs.id=candidates.id
+  returning jobs.*;
+end $$;
+revoke all on function public.claim_print_jobs(text,integer) from public;
+grant execute on function public.claim_print_jobs(text,integer) to service_role;
+
 -- Diagnostico de produccion seguro. Comprueba el contrato que usa la aplicacion
 -- y realiza una escritura temporal sin crear ni modificar pedidos o catalogo.
 create or replace function public.production_preflight()
@@ -301,7 +347,7 @@ declare
 begin
   foreach required_table in array array[
     'categories','products','admin_users','orders','order_items','order_events',
-    'stripe_webhook_events','order_email_deliveries','business_settings','contact_messages'
+    'stripe_webhook_events','order_email_deliveries','print_jobs','business_settings','contact_messages'
   ] loop
     if to_regclass('public.' || required_table) is null then
       missing := array_append(missing,'table:' || required_table);
@@ -334,6 +380,8 @@ begin
     'order_email_deliveries.id','order_email_deliveries.order_id','order_email_deliveries.email_kind',
     'order_email_deliveries.recipient','order_email_deliveries.status','order_email_deliveries.error_message',
     'order_email_deliveries.sent_at','order_email_deliveries.created_at','order_email_deliveries.updated_at',
+    'print_jobs.id','print_jobs.order_id','print_jobs.status','print_jobs.attempts','print_jobs.worker_id',
+    'print_jobs.claimed_at','print_jobs.printed_at','print_jobs.last_error','print_jobs.created_at','print_jobs.updated_at',
     'business_settings.id','business_settings.opening_time','business_settings.closing_time','business_settings.manual_pause',
     'business_settings.closed_days','business_settings.minimum_order','business_settings.weekly_hours','business_settings.service_start_date',
     'business_settings.default_wait_minutes',
@@ -353,6 +401,7 @@ begin
 
   foreach required_rpc in array array[
     'public.claim_stripe_webhook_event(text,text)',
+    'public.claim_print_jobs(text,integer)',
     'public.production_preflight()',
     'public.is_admin()',
     'public.submit_contact_message(text,text,text,text)',
@@ -440,6 +489,7 @@ alter table public.order_items enable row level security;
 alter table public.order_events enable row level security;
 alter table public.stripe_webhook_events enable row level security;
 alter table public.order_email_deliveries enable row level security;
+alter table public.print_jobs enable row level security;
 alter table public.business_settings enable row level security;
 alter table public.contact_messages enable row level security;
 
@@ -452,7 +502,8 @@ do $$ begin
   alter publication supabase_realtime add table public.order_items;
 exception when duplicate_object then null; end $$;
 
-revoke all on public.orders,public.order_items,public.order_events,public.stripe_webhook_events,public.order_email_deliveries from anon;
+revoke all on public.orders,public.order_items,public.order_events,public.stripe_webhook_events,public.order_email_deliveries,public.print_jobs from anon,authenticated;
+grant select on public.print_jobs to authenticated;
 grant select on public.categories,public.products,public.business_settings to anon,authenticated;
 grant all on public.categories,public.products,public.orders,public.order_items,public.order_events,public.business_settings,public.contact_messages to authenticated;
 grant select on public.admin_users to authenticated;
@@ -484,6 +535,8 @@ drop policy if exists "Admins can manage order items" on public.order_items;
 create policy "Admins can manage order items" on public.order_items for all to authenticated using(public.is_admin()) with check(public.is_admin());
 drop policy if exists "Admins can read order events" on public.order_events;
 create policy "Admins can read order events" on public.order_events for select to authenticated using(public.is_admin());
+drop policy if exists "Admins can read print jobs" on public.print_jobs;
+create policy "Admins can read print jobs" on public.print_jobs for select to authenticated using(public.is_admin());
 drop policy if exists "Admins can manage contact messages" on public.contact_messages;
 create policy "Admins can manage contact messages" on public.contact_messages for all to authenticated using(public.is_admin()) with check(public.is_admin());
 
@@ -512,6 +565,7 @@ select
   to_regclass('public.order_items') is not null as order_items_ok,
   to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_ok,
   to_regclass('public.order_email_deliveries') is not null as order_email_deliveries_ok,
+  to_regclass('public.print_jobs') is not null as print_jobs_ok,
   to_regclass('public.business_settings') is not null as business_settings_ok;
 
 notify pgrst,'reload schema';
