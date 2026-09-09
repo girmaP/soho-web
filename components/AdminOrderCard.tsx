@@ -124,6 +124,7 @@ export function AdminOrderCard({
           </div>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-neutral-600">
             <span>{order.customer_phone}</span>
+            <span>{order.customer_email}</span>
             <span>{order.order_type === 'pickup' ? 'Recogida en local' : 'Delivery local'}</span>
             <span>{new Date(order.created_at).toLocaleString('es-ES')}</span>
           </div>
@@ -151,6 +152,22 @@ export function AdminOrderCard({
       </ul>
 
       {order.notes && <p className="mt-4 rounded-3xl bg-amber-50 p-4 text-sm font-semibold text-amber-900">Nota: {order.notes}</p>}
+
+      {order.invoice_requested && (
+        <section className="mt-4 rounded-3xl border border-cyan-200 bg-cyan-50 p-5 text-sm text-neutral-700">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="font-black text-neutral-950">Datos de facturación</h4>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#036b71]">Solicita factura</span>
+          </div>
+          <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            <div><dt className="text-xs font-black uppercase tracking-wide text-neutral-500">Nombre o razón social</dt><dd className="mt-1 font-semibold text-neutral-950">{order.billing_name}</dd></div>
+            <div><dt className="text-xs font-black uppercase tracking-wide text-neutral-500">NIF/CIF</dt><dd className="mt-1 font-semibold text-neutral-950">{order.billing_tax_id}</dd></div>
+            <div className="sm:col-span-2"><dt className="text-xs font-black uppercase tracking-wide text-neutral-500">Dirección fiscal</dt><dd className="mt-1 font-semibold text-neutral-950">{order.billing_address}</dd></div>
+            <div><dt className="text-xs font-black uppercase tracking-wide text-neutral-500">Código postal y población</dt><dd className="mt-1 font-semibold text-neutral-950">{order.billing_postal_code} {order.billing_city}</dd></div>
+            <div><dt className="text-xs font-black uppercase tracking-wide text-neutral-500">Provincia</dt><dd className="mt-1 font-semibold text-neutral-950">{order.billing_province}</dd></div>
+          </dl>
+        </section>
+      )}
 
       <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
         <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-neutral-600">

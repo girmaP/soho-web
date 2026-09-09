@@ -21,15 +21,34 @@ const itemSchema = z.object({
   selected_extras: z.array(selectedExtraSchema).max(30).optional().default([])
 });
 
+const billingDetailsSchema = z.object({
+  taxId: z.string().trim().min(3, 'Introduce el NIF o CIF.').max(30),
+  name: z.string().trim().min(2, 'Introduce el nombre o razón social.').max(160),
+  address: z.string().trim().min(5, 'Introduce la dirección fiscal.').max(200),
+  postalCode: z.string().trim().regex(/^\d{5}$/, 'Introduce un código postal válido.'),
+  city: z.string().trim().min(2, 'Introduce la población.').max(100),
+  province: z.string().trim().min(2, 'Introduce la provincia.').max(100)
+});
+
 const requestSchema = z.object({
   checkoutAttemptId: z.string().uuid('Identificador de intento no válido.'),
   customerName: z.string().trim().min(2, 'Introduce tu nombre.').max(120),
   customerPhone: z.string().trim().min(6, 'Introduce tu teléfono.').max(30),
   customerEmail: z.string().trim().email('Introduce un correo válido.').max(180),
   notes: z.string().trim().max(500).optional().default(''),
+  invoiceRequested: z.boolean().optional().default(false),
+  billingDetails: billingDetailsSchema.nullable().optional().default(null),
   privacyAccepted: z.literal(true, { errorMap: () => ({ message: 'Debes aceptar la política de privacidad.' }) }),
   honeypot: z.string().max(0).optional().default(''),
   items: z.array(itemSchema).min(1, 'El carrito está vacío.').max(80)
+}).superRefine((data, context) => {
+  if (data.invoiceRequested && !data.billingDetails) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['billingDetails'],
+      message: 'Completa los datos de facturación.'
+    });
+  }
 });
 
 function siteUrlFromRequest(request: Request) {
@@ -145,6 +164,13 @@ export async function POST(request: Request) {
       customer_name: body.customerName,
       customer_phone: body.customerPhone,
       customer_email: body.customerEmail.toLowerCase(),
+      invoice_requested: body.invoiceRequested,
+      billing_tax_id: body.invoiceRequested ? body.billingDetails?.taxId.toUpperCase() : null,
+      billing_name: body.invoiceRequested ? body.billingDetails?.name : null,
+      billing_address: body.invoiceRequested ? body.billingDetails?.address : null,
+      billing_postal_code: body.invoiceRequested ? body.billingDetails?.postalCode : null,
+      billing_city: body.invoiceRequested ? body.billingDetails?.city : null,
+      billing_province: body.invoiceRequested ? body.billingDetails?.province : null,
       order_type: 'pickup',
       notes: body.notes || null,
       total_price: total,

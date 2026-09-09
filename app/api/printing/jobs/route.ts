@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   const orderIds = jobs.map((job: any) => job.order_id);
   const { data: orders, error: ordersError } = await supabaseAdmin
     .from('orders')
-    .select('id,customer_name,customer_phone,notes,total_price,paid_at,created_at,order_items(id,product_name,quantity,unit_price,total_price,customizations)')
+    .select('id,customer_name,customer_phone,customer_email,order_type,notes,total_price,paid_at,created_at,invoice_requested,billing_tax_id,billing_name,billing_address,billing_postal_code,billing_city,billing_province,order_items(id,product_name,quantity,unit_price,total_price,vat_rate,customizations,products(name))')
     .in('id', orderIds);
   if (ordersError) {
     console.error('print_jobs_orders_failed', { error: ordersError.message });
@@ -63,16 +63,48 @@ export async function GET(request: Request) {
         reference: printableOrderReference(order),
         customerName: order.customer_name,
         customerPhone: order.customer_phone,
+        customerEmail: order.customer_email,
+        orderType: order.order_type,
         notes: order.notes,
         total: Number(order.total_price),
         placedAt: order.paid_at || order.created_at,
-        items: (order.order_items || []).map((item: any) => ({
-          name: item.product_name,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unit_price),
-          total: Number(item.total_price),
-          customizations: item.customizations || {}
-        }))
+        invoiceRequested: Boolean(order.invoice_requested),
+        billingDetails: order.invoice_requested ? {
+          taxId: order.billing_tax_id,
+          name: order.billing_name,
+          address: order.billing_address,
+          postalCode: order.billing_postal_code,
+          city: order.billing_city,
+          province: order.billing_province
+        } : null,
+        items: (order.order_items || []).map((item: any) => {
+          const customizations = item.customizations || {};
+          const selectedExtras = Array.isArray(customizations.selected_extras)
+            ? customizations.selected_extras
+            : [];
+          const extras = [
+            ...(customizations.required_choice
+              ? [{ name: customizations.required_choice }]
+              : []),
+            ...selectedExtras.map((extra: any) => ({
+              name: Number(extra.quantity || 1) > 1
+                ? `${Number(extra.quantity)}x ${extra.name}`
+                : extra.name,
+              price: Number(extra.price || 0),
+              quantity: Number(extra.quantity || 1)
+            }))
+          ];
+
+          return {
+            name: item.products?.name || item.product_name,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unit_price),
+            total: Number(item.total_price),
+            vatRate: Number(item.vat_rate || 10),
+            extras,
+            customizations
+          };
+        })
       }
     }];
   });

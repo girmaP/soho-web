@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Check, Truck } from 'lucide-react';
+import { Building2, Check, ReceiptText, Truck } from 'lucide-react';
 import { getCart, saveCart } from '@/lib/cartStorage';
 import { CartItem } from '@/types/cart';
 import { formatPrice } from '@/utils/formatPrice';
@@ -37,6 +37,7 @@ export default function CheckoutPage() {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [invoiceRequested, setInvoiceRequested] = useState(false);
   const openNow = isBusinessOpenFromSettings(settings);
 
   useEffect(() => {
@@ -68,6 +69,15 @@ export default function CheckoutPage() {
         notes: String(formData.get('notes') || ''),
         privacyAccepted: formData.get('privacy') === 'on',
         honeypot: String(formData.get('website') || ''),
+        invoiceRequested,
+        billingDetails: invoiceRequested ? {
+          taxId: String(formData.get('billingTaxId') || ''),
+          name: String(formData.get('billingName') || ''),
+          address: String(formData.get('billingAddress') || ''),
+          postalCode: String(formData.get('billingPostalCode') || ''),
+          city: String(formData.get('billingCity') || ''),
+          province: String(formData.get('billingProvince') || '')
+        } : null,
         items: cart.map((item) => ({
           line_id: item.line_id,
           product_id: item.product_id,
@@ -146,6 +156,36 @@ export default function CheckoutPage() {
               <label className="grid gap-1.5 font-bold">Nombre<input name="customerName" required minLength={2} autoComplete="name" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Tu nombre" /></label>
               <label className="grid gap-1.5 font-bold">Teléfono<input name="customerPhone" required inputMode="tel" autoComplete="tel" pattern="[0-9+() .-]{6,30}" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="600 000 000" /></label>
               <label className="grid gap-1.5 font-bold">Correo electrónico<input name="customerEmail" type="email" required autoComplete="email" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="tu@email.com" /></label>
+              <section className="overflow-hidden rounded-3xl border border-black/10 bg-neutral-50">
+                <label className="flex cursor-pointer items-start gap-4 p-4 sm:p-5">
+                  <input
+                    name="invoiceRequested"
+                    type="checkbox"
+                    checked={invoiceRequested}
+                    onChange={(event) => setInvoiceRequested(event.target.checked)}
+                    className="mt-1 h-5 w-5 shrink-0 accent-[#049ca5]"
+                  />
+                  <span className="flex min-w-0 gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-[#047f86] shadow-sm"><ReceiptText size={20} aria-hidden="true" /></span>
+                    <span>
+                      <strong className="block text-base text-neutral-950">Necesito factura</strong>
+                      <span className="mt-1 block text-sm font-normal leading-5 text-neutral-600">Añade los datos fiscales que SOHO necesita para emitirla.</span>
+                    </span>
+                  </span>
+                </label>
+
+                {invoiceRequested && (
+                  <div className="grid gap-4 border-t border-black/10 bg-white p-4 sm:grid-cols-2 sm:p-5">
+                    <label className="grid gap-1.5 font-bold sm:col-span-2">Nombre o razón social<input name="billingName" required minLength={2} maxLength={160} autoComplete="organization" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Nombre completo o empresa" /></label>
+                    <label className="grid gap-1.5 font-bold">NIF/CIF<input name="billingTaxId" required minLength={3} maxLength={30} autoCapitalize="characters" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal uppercase outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="12345678Z" /></label>
+                    <label className="grid gap-1.5 font-bold">Código postal<input name="billingPostalCode" required inputMode="numeric" pattern="[0-9]{5}" maxLength={5} autoComplete="postal-code" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="36630" /></label>
+                    <label className="grid gap-1.5 font-bold sm:col-span-2">Dirección fiscal<input name="billingAddress" required minLength={5} maxLength={200} autoComplete="street-address" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Calle, número, piso…" /></label>
+                    <label className="grid gap-1.5 font-bold">Población<input name="billingCity" required minLength={2} maxLength={100} autoComplete="address-level2" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Cambados" /></label>
+                    <label className="grid gap-1.5 font-bold">Provincia<input name="billingProvince" required minLength={2} maxLength={100} autoComplete="address-level1" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Pontevedra" /></label>
+                    <p className="text-xs font-medium leading-5 text-neutral-500 sm:col-span-2">SOHO utilizará estos datos exclusivamente para preparar y gestionar la factura de este pedido.</p>
+                  </div>
+                )}
+              </section>
               <label className="grid gap-1.5 font-bold">Notas u observaciones<textarea name="notes" maxLength={500} className="min-h-28 rounded-2xl border border-black/15 p-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Sin cebolla, poco hecho, sin salsa..." /></label>
               <label className="flex items-start gap-3 rounded-2xl p-1 text-sm leading-5"><input name="privacy" type="checkbox" required className="mt-0.5 h-5 w-5 shrink-0 accent-[#049ca5]" /><span>Acepto que SOHO use mis datos únicamente para gestionar este pedido y sus comunicaciones.</span></label>
               {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 font-semibold text-red-700">{error}</p>}

@@ -22,7 +22,9 @@ export default function Page() {
         <p className="mt-4 text-neutral-700">
           SOHO Cambados utiliza únicamente los datos necesarios para preparar y
           gestionar tu pedido: nombre, teléfono, correo electrónico, productos
-          seleccionados y las observaciones que decidas añadir.
+          seleccionados y las observaciones que decidas añadir. Si solicitas
+          factura, también tratará el NIF/CIF, nombre o razón social y dirección
+          fiscal que facilites para emitirla y cumplir sus obligaciones legales.
         </p>
 
         <p className="mt-4 text-neutral-700">

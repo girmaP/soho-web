@@ -54,6 +54,13 @@ create table if not exists public.orders (
   customer_name text not null,
   customer_phone text not null,
   customer_email text not null,
+  invoice_requested boolean not null default false,
+  billing_tax_id text,
+  billing_name text,
+  billing_address text,
+  billing_postal_code text,
+  billing_city text,
+  billing_province text,
   order_type public.order_type not null default 'pickup',
   delivery_address text,
   notes text,
@@ -187,6 +194,13 @@ alter table public.order_items add column if not exists customizations jsonb not
 alter table public.orders add column if not exists customer_email text;
 update public.orders set customer_email='pendiente@soho.invalid' where customer_email is null;
 alter table public.orders alter column customer_email set not null;
+alter table public.orders add column if not exists invoice_requested boolean not null default false;
+alter table public.orders add column if not exists billing_tax_id text;
+alter table public.orders add column if not exists billing_name text;
+alter table public.orders add column if not exists billing_address text;
+alter table public.orders add column if not exists billing_postal_code text;
+alter table public.orders add column if not exists billing_city text;
+alter table public.orders add column if not exists billing_province text;
 alter table public.orders add column if not exists stripe_refund_id text;
 alter table public.orders add column if not exists checkout_attempt_id text;
 alter table public.orders add column if not exists refund_reason text;
@@ -256,6 +270,40 @@ set available = false
 where category_id in (
   select id from public.categories where lower(trim(name)) = 'prepara tu combi desayuno'
 );
+
+-- Salsas que también se venden como productos independientes. Las salsas que
+-- forman parte de un artículo siguen gestionándose mediante sus extras.
+do $$
+declare
+  sauces_category_id uuid;
+  product_name text;
+  affected_rows integer;
+begin
+  select id into sauces_category_id
+  from public.categories
+  where lower(trim(name)) = 'salsas'
+  order by created_at
+  limit 1;
+
+  if sauces_category_id is null then
+    insert into public.categories(name,sort_order)
+    values('Salsas',coalesce((select max(sort_order)+1 from public.categories),1))
+    returning id into sauces_category_id;
+  end if;
+
+  foreach product_name in array array['Alioli','Salsa brava','Salsa César','Tabasco'] loop
+    update public.products
+    set name=product_name,price=1.00,category_id=sauces_category_id,available=true,vat_rate=10
+    where lower(trim(name))=lower(product_name)
+       or (product_name='Salsa César' and lower(trim(name))='salsa cesar');
+    get diagnostics affected_rows = row_count;
+
+    if affected_rows=0 then
+      insert into public.products(name,description,price,category_id,available,recommended,vat_rate)
+      values(product_name,'Botecito de salsa',1.00,sauces_category_id,true,false,10);
+    end if;
+  end loop;
+end $$;
 
 -- Índices --------------------------------------------------------------------
 create unique index if not exists orders_order_token_key on public.orders(order_token);
@@ -355,7 +403,8 @@ begin
   end loop;
 
   foreach required_column in array array[
-    'id','customer_name','customer_phone','customer_email','order_type','delivery_address','notes',
+    'id','customer_name','customer_phone','customer_email','invoice_requested','billing_tax_id',
+    'billing_name','billing_address','billing_postal_code','billing_city','billing_province','order_type','delivery_address','notes',
     'status','payment_status','payment_method','stripe_session_id','stripe_payment_intent_id',
     'stripe_refund_id','checkout_attempt_id','cancellation_reason','refund_reason','order_token',
     'accepted_at','preparing_at','ready_at','delivered_at','paid_at','cancelled_at','refunded_at',
