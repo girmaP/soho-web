@@ -54,8 +54,6 @@ function buildPickupOptions(settings: BusinessSettings): PickupOption[] {
   const options: PickupOption[] = [];
   let foundOpenSlot = false;
 
-  // Busca únicamente el tramo abierto inmediatamente disponible. Así nunca se
-  // ofrecen horas fuera del horario de SOHO ni franjas de un servicio posterior.
   for (let index = 0; index < 96; index += 1) {
     const open = isBusinessOpenFromSettings(settings, cursor);
     if (open) {
@@ -194,7 +192,7 @@ export default function CheckoutPage() {
               <input name="website" className="hidden" tabIndex={-1} autoComplete="off" />
               <div className="rounded-3xl bg-cyan-50 p-4 text-sm leading-6 text-[#02565b]">
                 <strong className="block text-base">Pago online seguro</strong>
-                Al completar el pago, tu pedido aparecerá como aceptado. A los 2 minutos pasará a preparación y estará listo aproximadamente en {settings.default_wait_minutes} minutos desde el pago si eliges «lo antes posible».
+                Elige cuándo quieres recoger tu pedido. Si prefieres «lo antes posible», te indicaremos una hora estimada de recogida.
               </div>
 
               <label className="grid gap-2 rounded-3xl border border-cyan-100 bg-cyan-50/60 p-4 font-bold">
@@ -282,7 +280,7 @@ export default function CheckoutPage() {
             {!cart.length && <p className="rounded-2xl bg-neutral-50 p-4 text-sm font-semibold text-neutral-600">El carrito está vacío.</p>}
           </div>
           <div className="mt-5 flex justify-between border-t pt-5 text-xl"><b>Total</b><b>{formatPrice(total)}</b></div>
-          <p className="mt-3 text-xs leading-5 text-neutral-500">En recogida, Stripe confirma el pago y los estados avanzan automáticamente hasta «Listo». La entrega se marca manualmente. En delivery, el pedido y el pago se gestionan directamente en Caylu.</p>
+          <p className="mt-3 text-xs leading-5 text-neutral-500">Completa el pago online y consulta después el estado de tu pedido desde el enlace de seguimiento.</p>
         </aside>
       </div>
     </main>
