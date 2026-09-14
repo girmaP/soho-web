@@ -192,7 +192,7 @@ export default function CheckoutPage() {
               <input name="website" className="hidden" tabIndex={-1} autoComplete="off" />
               <div className="rounded-3xl bg-cyan-50 p-4 text-sm leading-6 text-[#02565b]">
                 <strong className="block text-base">Pago online seguro</strong>
-                Elige cuándo quieres recoger tu pedido. Si prefieres «lo antes posible», te indicaremos una hora estimada de recogida.
+                El pago se realiza de forma segura con tarjeta a través de Stripe.
               </div>
 
               <label className="grid gap-2 rounded-3xl border border-cyan-100 bg-cyan-50/60 p-4 font-bold">
@@ -209,7 +209,7 @@ export default function CheckoutPage() {
                   ))}
                 </select>
                 <span className="text-xs font-medium leading-5 text-neutral-600">
-                  Solo aparecen horas disponibles dentro del horario de SOHO y con el tiempo mínimo de preparación necesario.
+                  Elige cuándo quieres recoger tu pedido. Si prefieres «lo antes posible», te indicaremos una hora estimada. Solo aparecen horas disponibles dentro del horario de SOHO y con el tiempo mínimo de preparación necesario.
                 </span>
               </label>
 
