@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Check, ReceiptText, Truck } from 'lucide-react';
+import { Building2, Check, Clock3, ReceiptText, Truck } from 'lucide-react';
 import { getCart, saveCart } from '@/lib/cartStorage';
 import { CartItem } from '@/types/cart';
 import { formatPrice } from '@/utils/formatPrice';
@@ -12,6 +12,7 @@ import { customizationLabel } from '@/lib/productCustomization';
 import { siteConfig } from '@/lib/siteConfig';
 
 type OrderMethod = 'pickup' | 'delivery';
+type PickupOption = { value: string; label: string };
 
 const CHECKOUT_ATTEMPT_KEY = 'soho_checkout_attempt_id';
 
@@ -30,6 +31,45 @@ function renewCheckoutAttemptId() {
   return next;
 }
 
+function roundUpToQuarterHour(date: Date) {
+  const next = new Date(date);
+  next.setSeconds(0, 0);
+  const remainder = next.getMinutes() % 15;
+  if (remainder) next.setMinutes(next.getMinutes() + (15 - remainder));
+  return next;
+}
+
+function pickupTimeLabel(date: Date) {
+  return new Intl.DateTimeFormat('es-ES', {
+    timeZone: 'Europe/Madrid',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date);
+}
+
+function buildPickupOptions(settings: BusinessSettings): PickupOption[] {
+  const minimumWait = Math.min(180, Math.max(5, Number(settings.default_wait_minutes || 30)));
+  let cursor = roundUpToQuarterHour(new Date(Date.now() + minimumWait * 60_000));
+  const options: PickupOption[] = [];
+  let foundOpenSlot = false;
+
+  // Busca únicamente el tramo abierto inmediatamente disponible. Así nunca se
+  // ofrecen horas fuera del horario de SOHO ni franjas de un servicio posterior.
+  for (let index = 0; index < 96; index += 1) {
+    const open = isBusinessOpenFromSettings(settings, cursor);
+    if (open) {
+      foundOpenSlot = true;
+      options.push({ value: cursor.toISOString(), label: pickupTimeLabel(cursor) });
+    } else if (foundOpenSlot) {
+      break;
+    }
+    cursor = new Date(cursor.getTime() + 15 * 60_000);
+  }
+
+  return options;
+}
+
 export default function CheckoutPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [method, setMethod] = useState<OrderMethod>('pickup');
@@ -38,6 +78,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [invoiceRequested, setInvoiceRequested] = useState(false);
+  const [pickupAt, setPickupAt] = useState('');
   const openNow = isBusinessOpenFromSettings(settings);
 
   useEffect(() => {
@@ -67,6 +108,7 @@ export default function CheckoutPage() {
         customerPhone: String(formData.get('customerPhone') || ''),
         customerEmail: String(formData.get('customerEmail') || ''),
         notes: String(formData.get('notes') || ''),
+        pickupAt: pickupAt || null,
         privacyAccepted: formData.get('privacy') === 'on',
         honeypot: String(formData.get('website') || ''),
         invoiceRequested,
@@ -115,6 +157,7 @@ export default function CheckoutPage() {
   }
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+  const pickupOptions = useMemo(() => settingsLoaded && openNow ? buildPickupOptions(settings) : [], [settings, settingsLoaded, openNow]);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:py-10">
@@ -151,8 +194,27 @@ export default function CheckoutPage() {
               <input name="website" className="hidden" tabIndex={-1} autoComplete="off" />
               <div className="rounded-3xl bg-cyan-50 p-4 text-sm leading-6 text-[#02565b]">
                 <strong className="block text-base">Pago online seguro</strong>
-                Al completar el pago, tu pedido aparecerá como aceptado. A los 2 minutos pasará a preparación y estará listo aproximadamente en {settings.default_wait_minutes} minutos desde el pago.
+                Al completar el pago, tu pedido aparecerá como aceptado. A los 2 minutos pasará a preparación y estará listo aproximadamente en {settings.default_wait_minutes} minutos desde el pago si eliges «lo antes posible».
               </div>
+
+              <label className="grid gap-2 rounded-3xl border border-cyan-100 bg-cyan-50/60 p-4 font-bold">
+                <span className="flex items-center gap-2"><Clock3 size={19} className="text-[#047f86]" /> Hora de recogida</span>
+                <select
+                  name="pickupAt"
+                  value={pickupAt}
+                  onChange={(event) => setPickupAt(event.target.value)}
+                  className="min-h-12 rounded-2xl border border-black/15 bg-white px-4 font-semibold text-neutral-900 outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100"
+                >
+                  <option value="">Lo antes posible (aprox. {settings.default_wait_minutes} min)</option>
+                  {pickupOptions.map((option) => (
+                    <option key={option.value} value={option.value}>Recoger a las {option.label}</option>
+                  ))}
+                </select>
+                <span className="text-xs font-medium leading-5 text-neutral-600">
+                  Solo aparecen horas disponibles dentro del horario de SOHO y con el tiempo mínimo de preparación necesario.
+                </span>
+              </label>
+
               <label className="grid gap-1.5 font-bold">Nombre<input name="customerName" required minLength={2} autoComplete="name" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Tu nombre" /></label>
               <label className="grid gap-1.5 font-bold">Teléfono<input name="customerPhone" required inputMode="tel" autoComplete="tel" pattern="[0-9+() .-]{6,30}" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="600 000 000" /></label>
               <label className="grid gap-1.5 font-bold">Correo electrónico<input name="customerEmail" type="email" required autoComplete="email" className="min-h-12 rounded-2xl border border-black/15 px-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="tu@email.com" /></label>
