@@ -60,6 +60,17 @@ export async function GET(request: Request) {
     const pickupAt = pickupBase
       ? new Date(new Date(pickupBase).getTime() + waitMinutes * 60_000).toISOString()
       : null;
+    const pickupTimeText = pickupAt
+      ? new Intl.DateTimeFormat('es-ES', {
+          timeZone: 'Europe/Madrid',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).format(new Date(pickupAt))
+      : null;
+    const ticketNotes = pickupTimeText
+      ? `*** RECOGIDA ESTIMADA: ${pickupTimeText} ***${order.notes ? ` ${order.notes}` : ''}`
+      : order.notes;
 
     return [{
       id: job.id,
@@ -71,7 +82,7 @@ export async function GET(request: Request) {
         customerPhone: order.customer_phone,
         customerEmail: order.customer_email,
         orderType: order.order_type,
-        notes: order.notes,
+        notes: ticketNotes,
         total: Number(order.total_price),
         placedAt: order.paid_at || order.created_at,
         estimatedTime: waitMinutes,
