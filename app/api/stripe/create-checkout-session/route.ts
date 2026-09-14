@@ -36,6 +36,7 @@ const requestSchema = z.object({
   customerPhone: z.string().trim().min(6, 'Introduce tu teléfono.').max(30),
   customerEmail: z.string().trim().email('Introduce un correo válido.').max(180),
   notes: z.string().trim().max(500).optional().default(''),
+  pickupAt: z.string().datetime({ offset: true }).nullable().optional().default(null),
   invoiceRequested: z.boolean().optional().default(false),
   billingDetails: billingDetailsSchema.nullable().optional().default(null),
   privacyAccepted: z.literal(true, { errorMap: () => ({ message: 'Debes aceptar la política de privacidad.' }) }),
@@ -93,8 +94,32 @@ export async function POST(request: Request) {
     }
 
     const { data: settings } = await supabaseAdmin.from('business_settings').select('*').eq('id', 'main').maybeSingle();
-    if (!isBusinessOpenFromSettings({ ...defaultBusinessSettings, ...(settings || {}) } as any)) {
+    const businessSettings = { ...defaultBusinessSettings, ...(settings || {}) } as any;
+    if (!isBusinessOpenFromSettings(businessSettings)) {
       return NextResponse.json({ ok: false, error: 'SOHO no acepta pedidos online en este momento.' }, { status: 409 });
+    }
+
+    const minimumWaitMinutes = Math.min(180, Math.max(5, Number(businessSettings.default_wait_minutes || 30)));
+    const nowMs = Date.now();
+    let pickupAt: Date | null = null;
+    let initialEstimatedMinutes = minimumWaitMinutes;
+
+    if (body.pickupAt) {
+      pickupAt = new Date(body.pickupAt);
+      const pickupMs = pickupAt.getTime();
+      if (!Number.isFinite(pickupMs)) {
+        return NextResponse.json({ ok: false, error: 'La hora de recogida no es válida.' }, { status: 400 });
+      }
+      if (pickupMs < nowMs + minimumWaitMinutes * 60_000 - 60_000) {
+        return NextResponse.json({ ok: false, error: `Selecciona una hora de recogida con al menos ${minimumWaitMinutes} minutos de margen.` }, { status: 400 });
+      }
+      if (pickupMs > nowMs + 24 * 60 * 60_000) {
+        return NextResponse.json({ ok: false, error: 'La hora de recogida debe estar dentro de las próximas 24 horas.' }, { status: 400 });
+      }
+      if (!isBusinessOpenFromSettings(businessSettings, pickupAt)) {
+        return NextResponse.json({ ok: false, error: 'La hora seleccionada está fuera del horario de SOHO.' }, { status: 400 });
+      }
+      initialEstimatedMinutes = Math.max(5, Math.ceil((pickupMs - nowMs) / 60_000));
     }
 
     const ids = [...new Set(body.items.map((item) => item.product_id))];
@@ -174,6 +199,7 @@ export async function POST(request: Request) {
       order_type: 'pickup',
       notes: body.notes || null,
       total_price: total,
+      estimated_time: initialEstimatedMinutes,
       status: 'pending',
       payment_status: 'pending',
       payment_method: 'stripe',
@@ -203,7 +229,7 @@ export async function POST(request: Request) {
       phone_number_collection: { enabled: false },
       payment_intent_data: {
         receipt_email: body.customerEmail.toLowerCase(),
-        metadata: { order_id: order.id }
+        metadata: { order_id: order.id, pickup_at: pickupAt ? pickupAt.toISOString() : '' }
       },
       line_items: orderItems.map((item) => {
         const rawImage = typeof item.image_url === 'string' ? item.image_url.trim() : '';
@@ -219,7 +245,7 @@ export async function POST(request: Request) {
           }
         };
       }),
-      metadata: { order_id: order.id, order_token: order.order_token },
+      metadata: { order_id: order.id, order_token: order.order_token, pickup_at: pickupAt ? pickupAt.toISOString() : '' },
       success_url: `${siteUrl}/checkout/success?order=${order.id}&token=${order.order_token}`,
       cancel_url: `${siteUrl}/checkout/cancel?order=${order.id}&token=${order.order_token}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60
@@ -227,7 +253,7 @@ export async function POST(request: Request) {
 
     const { error: updateError } = await supabaseAdmin.from('orders').update({ stripe_session_id: session.id, updated_at: new Date().toISOString() }).eq('id', order.id);
     if (updateError) throw updateError;
-    await appendOrderEvent({ orderId: order.id, eventType: 'checkout.created', actorType: 'customer', metadata: { stripeSessionId: session.id } });
+    await appendOrderEvent({ orderId: order.id, eventType: 'checkout.created', actorType: 'customer', metadata: { stripeSessionId: session.id, pickupAt: pickupAt?.toISOString() || null } });
 
     return NextResponse.json({ ok: true, url: session.url, orderId: order.id });
   } catch (error: any) {
