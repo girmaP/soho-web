@@ -89,7 +89,7 @@ export default function HomePage() {
               <div className="rounded-[1.5rem] p-5 text-white">
                 <strong className="text-lg">Recogida en local</strong>
                 <p className="mt-2 text-sm font-medium leading-6 text-white/80">
-                  Envía tu pedido, espera la confirmación y recoge cuando SOHO marque el tiempo estimado.
+                  Completa el pago y el pedido entra directamente en SOHO. La recogida estimada es 30 minutos después del pago.
                 </p>
               </div>
               <div className="rounded-[1.5rem] bg-[#049ca5]/35 p-5 text-white shadow-inner ring-1 ring-cyan-200/10">
@@ -143,9 +143,9 @@ export default function HomePage() {
                 <Clock3 size={28} />
               </span>
               <div>
-                <h2 className="text-xl font-black text-neutral-950">3. SOHO confirma</h2>
+                <h2 className="text-xl font-black text-neutral-950">3. Recoge en 30 min</h2>
                 <p className="mt-2 text-sm font-medium leading-6 text-neutral-600">
-                  El negocio acepta y marca 10, 15, 20, 30 o 45 min.
+                  Tras completar el pago, el pedido entra directamente y la recogida queda estimada a 30 minutos.
                 </p>
               </div>
             </div>
