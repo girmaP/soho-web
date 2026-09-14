@@ -6,6 +6,8 @@ import { enqueueOrderForPrinting } from '@/lib/server/printJobs';
 
 type ActivationSource = 'stripe_webhook' | 'checkout_return' | 'order_tracking';
 
+const STANDARD_WAIT_MINUTES = 30;
+
 export async function activatePaidOrder(params: {
   orderId: string;
   paymentIntent: Stripe.PaymentIntent;
@@ -31,8 +33,7 @@ export async function activatePaidOrder(params: {
     throw new Error('El importe cobrado no coincide con el pedido.');
   }
 
-  const { data: rawSettings } = await supabaseAdmin.from('business_settings').select('*').eq('id', 'main').maybeSingle();
-  const waitMinutes = Math.min(180, Math.max(5, Number(rawSettings?.default_wait_minutes || 10)));
+  const waitMinutes = STANDARD_WAIT_MINUTES;
   const now = new Date().toISOString();
   const alreadyActive = order.payment_status === 'paid' && ['accepted', 'preparing', 'ready', 'delivered'].includes(order.status);
 
@@ -44,7 +45,7 @@ export async function activatePaidOrder(params: {
     paid_at: order.paid_at || now,
     accepted_at: order.accepted_at || now,
     preparing_at: order.preparing_at,
-    estimated_time: order.estimated_time || waitMinutes,
+    estimated_time: alreadyActive && order.estimated_time ? order.estimated_time : waitMinutes,
     updated_at: now
   }).eq('id', orderId).select('*').single();
   if (updateError) throw updateError;
@@ -57,7 +58,7 @@ export async function activatePaidOrder(params: {
       fromStatus: order.status,
       toStatus: 'accepted',
       stripeEventId: eventId || null,
-      metadata: { paymentIntentId: paymentIntent.id, estimatedTime: order.estimated_time || waitMinutes, source }
+      metadata: { paymentIntentId: paymentIntent.id, estimatedTime: waitMinutes, source }
     }).catch((eventError) => console.error('order_event_append_failed', { orderId, source, error: eventError?.message }));
 
     await sendOrderEmail(orderId, 'accepted').catch((emailError) =>
