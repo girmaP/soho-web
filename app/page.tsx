@@ -7,18 +7,25 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Clock3, ListOrdered, MapPin, Navigation, Phone, Send, UserRound } from 'lucide-react';
 import { siteConfig } from '@/lib/siteConfig';
+import { defaultBusinessSettings, getBusinessSettings } from '@/lib/businessConfig';
 const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=A%20Mari%C3%B1a%203%2C%20Cambados';
 
 export default function HomePage() {
   const [contact, setContact] = useState({ name: '', email: '', phone: '', message: '' });
   const [contactStatus, setContactStatus] = useState('');
   const [sending, setSending] = useState(false);
+  const [waitMinutes, setWaitMinutes] = useState(defaultBusinessSettings.default_wait_minutes);
 
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.includes('type=recovery') && hash.includes('access_token=')) {
       window.location.replace(`/admin/reset-password${hash}`);
+      return;
     }
+
+    getBusinessSettings()
+      .then((settings) => setWaitMinutes(settings.default_wait_minutes))
+      .catch(() => setWaitMinutes(defaultBusinessSettings.default_wait_minutes));
   }, []);
 
   async function submitContact(e: React.FormEvent) {
@@ -89,7 +96,7 @@ export default function HomePage() {
               <div className="rounded-[1.5rem] p-5 text-white">
                 <strong className="text-lg">Recogida en local</strong>
                 <p className="mt-2 text-sm font-medium leading-6 text-white/80">
-                  Completa el pago y el pedido entra directamente en SOHO. La recogida estimada es 30 minutos después del pago.
+                  Completa el pago y el pedido entra directamente en SOHO. Si eliges «lo antes posible», la recogida estimada es de {waitMinutes} minutos. También puedes seleccionar una hora de recogida disponible.
                 </p>
               </div>
               <div className="rounded-[1.5rem] bg-[#049ca5]/35 p-5 text-white shadow-inner ring-1 ring-cyan-200/10">
@@ -143,9 +150,9 @@ export default function HomePage() {
                 <Clock3 size={28} />
               </span>
               <div>
-                <h2 className="text-xl font-black text-neutral-950">3. Recoge en 30 min</h2>
+                <h2 className="text-xl font-black text-neutral-950">3. Recoge en {waitMinutes} min</h2>
                 <p className="mt-2 text-sm font-medium leading-6 text-neutral-600">
-                  Tras completar el pago, el pedido entra directamente y la recogida queda estimada a 30 minutos.
+                  Tras completar el pago, el pedido entra directamente. Si eliges «lo antes posible», la recogida queda estimada en {waitMinutes} minutos; también puedes elegir una hora disponible.
                 </p>
               </div>
             </div>
