@@ -33,8 +33,16 @@ export async function activatePaidOrder(params: {
     throw new Error('El importe cobrado no coincide con el pedido.');
   }
 
-  const waitMinutes = STANDARD_WAIT_MINUTES;
-  const now = new Date().toISOString();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const requestedPickupAt = paymentIntent.metadata?.pickup_at?.trim() || '';
+  const requestedPickupMs = requestedPickupAt ? new Date(requestedPickupAt).getTime() : NaN;
+  const requestedWaitMinutes = Number.isFinite(requestedPickupMs)
+    ? Math.max(5, Math.ceil((requestedPickupMs - nowDate.getTime()) / 60_000))
+    : STANDARD_WAIT_MINUTES;
+  const waitMinutes = Number.isFinite(requestedPickupMs) && requestedPickupMs > nowDate.getTime()
+    ? requestedWaitMinutes
+    : STANDARD_WAIT_MINUTES;
   const alreadyActive = order.payment_status === 'paid' && ['accepted', 'preparing', 'ready', 'delivered'].includes(order.status);
 
   const { data: updated, error: updateError } = await supabaseAdmin.from('orders').update({
@@ -58,7 +66,12 @@ export async function activatePaidOrder(params: {
       fromStatus: order.status,
       toStatus: 'accepted',
       stripeEventId: eventId || null,
-      metadata: { paymentIntentId: paymentIntent.id, estimatedTime: waitMinutes, source }
+      metadata: {
+        paymentIntentId: paymentIntent.id,
+        estimatedTime: waitMinutes,
+        requestedPickupAt: requestedPickupAt || null,
+        source
+      }
     }).catch((eventError) => console.error('order_event_append_failed', { orderId, source, error: eventError?.message }));
 
     await sendOrderEmail(orderId, 'accepted').catch((emailError) =>
