@@ -82,7 +82,7 @@ export async function getBusinessSettings(): Promise<BusinessSettings> {
     closing_time: validTime(data.closing_time, defaultBusinessSettings.closing_time),
     manual_pause: Boolean(data.manual_pause), closed_days: Array.isArray(data.closed_days) ? data.closed_days : [],
     minimum_order: Number(data.minimum_order || 0),
-    default_wait_minutes: 30,
+    default_wait_minutes: Number(data.default_wait_minutes ?? defaultBusinessSettings.default_wait_minutes),
     printer_price_per_ticket: Number(data.printer_price_per_ticket || 0),
     monthly_management_fee: Number(data.monthly_management_fee || 0), monthly_hosting_fee: Number(data.monthly_hosting_fee || 0),
     annual_domain_fee: Number(data.annual_domain_fee || 0)
