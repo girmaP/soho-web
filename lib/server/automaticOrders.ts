@@ -6,8 +6,6 @@ import { enqueueOrderForPrinting } from '@/lib/server/printJobs';
 
 type ActivationSource = 'stripe_webhook' | 'checkout_return' | 'order_tracking';
 
-const STANDARD_WAIT_MINUTES = 30;
-
 export async function activatePaidOrder(params: {
   orderId: string;
   paymentIntent: Stripe.PaymentIntent;
@@ -33,16 +31,23 @@ export async function activatePaidOrder(params: {
     throw new Error('El importe cobrado no coincide con el pedido.');
   }
 
+  const { data: settings } = await supabaseAdmin
+    .from('business_settings')
+    .select('default_wait_minutes')
+    .eq('id', 'main')
+    .maybeSingle();
+
+  const configuredWaitMinutes = Math.min(180, Math.max(5, Number(settings?.default_wait_minutes || 30)));
   const nowDate = new Date();
   const now = nowDate.toISOString();
   const requestedPickupAt = paymentIntent.metadata?.pickup_at?.trim() || '';
   const requestedPickupMs = requestedPickupAt ? new Date(requestedPickupAt).getTime() : NaN;
   const requestedWaitMinutes = Number.isFinite(requestedPickupMs)
     ? Math.max(5, Math.ceil((requestedPickupMs - nowDate.getTime()) / 60_000))
-    : STANDARD_WAIT_MINUTES;
+    : configuredWaitMinutes;
   const waitMinutes = Number.isFinite(requestedPickupMs) && requestedPickupMs > nowDate.getTime()
     ? requestedWaitMinutes
-    : STANDARD_WAIT_MINUTES;
+    : configuredWaitMinutes;
   const alreadyActive = order.payment_status === 'paid' && ['accepted', 'preparing', 'ready', 'delivered'].includes(order.status);
 
   const { data: updated, error: updateError } = await supabaseAdmin.from('orders').update({
