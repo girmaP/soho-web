@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   const orderIds = jobs.map((job: any) => job.order_id);
   const { data: orders, error: ordersError } = await supabaseAdmin
     .from('orders')
-    .select('id,customer_name,customer_phone,customer_email,order_type,notes,total_price,paid_at,created_at,invoice_requested,billing_tax_id,billing_name,billing_address,billing_postal_code,billing_city,billing_province,order_items(id,product_name,quantity,unit_price,total_price,vat_rate,customizations,products(name))')
+    .select('id,customer_name,customer_phone,customer_email,order_type,notes,total_price,paid_at,accepted_at,estimated_time,created_at,invoice_requested,billing_tax_id,billing_name,billing_address,billing_postal_code,billing_city,billing_province,order_items(id,product_name,quantity,unit_price,total_price,vat_rate,customizations,products(name))')
     .in('id', orderIds);
   if (ordersError) {
     console.error('print_jobs_orders_failed', { error: ordersError.message });
@@ -55,6 +55,12 @@ export async function GET(request: Request) {
   const payload = jobs.flatMap((job: any) => {
     const order: any = orderMap.get(job.order_id);
     if (!order) return [];
+    const waitMinutes = Number(order.estimated_time || 30);
+    const pickupBase = order.accepted_at || order.paid_at || order.created_at;
+    const pickupAt = pickupBase
+      ? new Date(new Date(pickupBase).getTime() + waitMinutes * 60_000).toISOString()
+      : null;
+
     return [{
       id: job.id,
       attempt: job.attempts,
@@ -68,6 +74,8 @@ export async function GET(request: Request) {
         notes: order.notes,
         total: Number(order.total_price),
         placedAt: order.paid_at || order.created_at,
+        estimatedTime: waitMinutes,
+        pickupAt,
         invoiceRequested: Boolean(order.invoice_requested),
         billingDetails: order.invoice_requested ? {
           taxId: order.billing_tax_id,
