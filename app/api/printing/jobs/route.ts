@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   const orderIds = jobs.map((job: any) => job.order_id);
   const { data: orders, error: ordersError } = await supabaseAdmin
     .from('orders')
-    .select('id,customer_name,customer_phone,customer_email,order_type,notes,total_price,paid_at,accepted_at,estimated_time,created_at,invoice_requested,billing_tax_id,billing_name,billing_address,billing_postal_code,billing_city,billing_province,order_items(id,product_name,quantity,unit_price,total_price,vat_rate,customizations,products(name))')
+    .select('id,customer_name,customer_phone,customer_email,order_type,notes,total_price,paid_at,accepted_at,estimated_time,created_at,invoice_requested,invoice_number,billing_tax_id,billing_name,billing_address,billing_postal_code,billing_city,billing_province,order_items(id,product_name,quantity,unit_price,total_price,vat_rate,customizations,products(name))')
     .in('id', orderIds);
   if (ordersError) {
     console.error('print_jobs_orders_failed', { error: ordersError.message });
@@ -78,6 +78,7 @@ export async function GET(request: Request) {
       order: {
         id: order.id,
         reference: printableOrderReference(order),
+        invoiceNumber: order.invoice_number || null,
         customerName: order.customer_name,
         customerPhone: order.customer_phone,
         customerEmail: order.customer_email,
@@ -106,9 +107,7 @@ export async function GET(request: Request) {
               ? [{ name: customizations.required_choice }]
               : []),
             ...selectedExtras.map((extra: any) => ({
-              name: Number(extra.quantity || 1) > 1
-                ? `${Number(extra.quantity)}x ${extra.name}`
-                : extra.name,
+              name: extra.name,
               price: Number(extra.price || 0),
               quantity: Number(extra.quantity || 1)
             }))
