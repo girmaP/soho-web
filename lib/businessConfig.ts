@@ -43,14 +43,16 @@ export const defaultWeeklyHours: WeeklyHours = {
   '0': { open: '10:00', close: '01:00', closed: false }
 };
 
+// Hasta que Martín configure los turnos reales, se conserva el horario actual como un único turno.
+// Así la actualización no cambia de golpe las horas disponibles en producción.
 export const defaultKitchenHours: KitchenHours = {
-  '1': { closed: false, lunch: { open: '13:00', close: '16:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: true } },
-  '2': { closed: false, lunch: { open: '13:00', close: '16:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: true } },
-  '3': { closed: false, lunch: { open: '13:00', close: '16:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: true } },
-  '4': { closed: false, lunch: { open: '13:00', close: '16:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: true } },
-  '5': { closed: false, lunch: { open: '13:00', close: '16:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: true } },
-  '6': { closed: false, lunch: { open: '13:00', close: '16:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: true } },
-  '0': { closed: false, lunch: { open: '13:00', close: '16:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: true } }
+  '1': { closed: false, lunch: { open: '09:00', close: '01:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: false } },
+  '2': { closed: false, lunch: { open: '09:00', close: '01:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: false } },
+  '3': { closed: false, lunch: { open: '09:00', close: '01:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: false } },
+  '4': { closed: false, lunch: { open: '09:00', close: '01:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: false } },
+  '5': { closed: false, lunch: { open: '09:00', close: '01:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: false } },
+  '6': { closed: false, lunch: { open: '10:00', close: '01:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: false } },
+  '0': { closed: false, lunch: { open: '10:00', close: '01:00', enabled: true }, dinner: { open: '20:00', close: '23:30', enabled: false } }
 };
 
 export const defaultBusinessSettings: BusinessSettings = {
