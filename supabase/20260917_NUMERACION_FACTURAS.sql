@@ -72,7 +72,7 @@ begin
     order by coalesce(paid_at, created_at), created_at, id
   loop
     update public.orders
-    set invoice_number = null
+    set payment_status = payment_status
     where id = r.id;
   end loop;
 end $$;
