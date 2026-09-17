@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { assertStripeConfiguration, stripe } from '@/lib/stripe';
-import { isBusinessOpenFromSettings, defaultBusinessSettings } from '@/lib/businessConfig';
+import { defaultBusinessSettings, isBusinessOpenFromSettings, isKitchenOpenFromSettings, nextKitchenPickupAt } from '@/lib/businessConfig';
 import { appendOrderEvent } from '@/lib/server/orderEvents';
 import { isHiddenCatalogCategory, resolvedProductImage } from '@/lib/catalogPresentation';
 import { customizationLabel, extraProfileForCategory, extrasForCategory, requiredChoicesFromName, selectedExtrasTotal } from '@/lib/productCustomization';
@@ -44,11 +44,7 @@ const requestSchema = z.object({
   items: z.array(itemSchema).min(1, 'El carrito está vacío.').max(80)
 }).superRefine((data, context) => {
   if (data.invoiceRequested && !data.billingDetails) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['billingDetails'],
-      message: 'Completa los datos de facturación.'
-    });
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['billingDetails'], message: 'Completa los datos de facturación.' });
   }
 });
 
@@ -78,19 +74,10 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true, url: existingSession.url, orderId: existingOrder.id, reused: true });
         }
         if (existingSession.status === 'complete' || existingOrder.payment_status === 'authorized' || existingOrder.payment_status === 'paid') {
-          return NextResponse.json({
-            ok: false,
-            code: 'CHECKOUT_ATTEMPT_COMPLETED',
-            error: 'El intento anterior ya terminó. Se iniciará un pedido nuevo.'
-          }, { status: 409 });
+          return NextResponse.json({ ok: false, code: 'CHECKOUT_ATTEMPT_COMPLETED', error: 'El intento anterior ya terminó. Se iniciará un pedido nuevo.' }, { status: 409 });
         }
       }
-
-      return NextResponse.json({
-        ok: false,
-        code: 'CHECKOUT_ATTEMPT_RENEWABLE',
-        error: 'El intento anterior ya no está activo. Se iniciará uno nuevo.'
-      }, { status: 409 });
+      return NextResponse.json({ ok: false, code: 'CHECKOUT_ATTEMPT_RENEWABLE', error: 'El intento anterior ya no está activo. Se iniciará uno nuevo.' }, { status: 409 });
     }
 
     const { data: settings } = await supabaseAdmin.from('business_settings').select('*').eq('id', 'main').maybeSingle();
@@ -99,28 +86,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'SOHO no acepta pedidos online en este momento.' }, { status: 409 });
     }
 
-    const minimumWaitMinutes = Math.min(180, Math.max(5, Number(businessSettings.default_wait_minutes || 30)));
-    const nowMs = Date.now();
-    let pickupAt: Date | null = null;
-    let initialEstimatedMinutes = minimumWaitMinutes;
+    const nowDate = new Date();
+    const nowMs = nowDate.getTime();
+    const fastestPickup = nextKitchenPickupAt(businessSettings, nowDate);
+    if (!fastestPickup) {
+      return NextResponse.json({ ok: false, error: 'No hay un horario de cocina disponible para programar la recogida.' }, { status: 409 });
+    }
 
+    let pickupAt = fastestPickup;
     if (body.pickupAt) {
       pickupAt = new Date(body.pickupAt);
       const pickupMs = pickupAt.getTime();
       if (!Number.isFinite(pickupMs)) {
         return NextResponse.json({ ok: false, error: 'La hora de recogida no es válida.' }, { status: 400 });
       }
-      if (pickupMs < nowMs + minimumWaitMinutes * 60_000 - 60_000) {
-        return NextResponse.json({ ok: false, error: `Selecciona una hora de recogida con al menos ${minimumWaitMinutes} minutos de margen.` }, { status: 400 });
+      if (pickupMs < fastestPickup.getTime() - 60_000) {
+        return NextResponse.json({ ok: false, error: 'Esa hora es anterior a la primera recogida que la cocina puede preparar.' }, { status: 400 });
       }
       if (pickupMs > nowMs + 24 * 60 * 60_000) {
         return NextResponse.json({ ok: false, error: 'La hora de recogida debe estar dentro de las próximas 24 horas.' }, { status: 400 });
       }
-      if (!isBusinessOpenFromSettings(businessSettings, pickupAt)) {
-        return NextResponse.json({ ok: false, error: 'La hora seleccionada está fuera del horario de SOHO.' }, { status: 400 });
+      if (!isKitchenOpenFromSettings(businessSettings, pickupAt)) {
+        return NextResponse.json({ ok: false, error: 'La hora seleccionada está fuera del horario de cocina de SOHO.' }, { status: 400 });
       }
-      initialEstimatedMinutes = Math.max(5, Math.ceil((pickupMs - nowMs) / 60_000));
     }
+
+    const initialEstimatedMinutes = Math.max(5, Math.ceil((pickupAt.getTime() - nowMs) / 60_000));
 
     const ids = [...new Set(body.items.map((item) => item.product_id))];
     const { data: products, error: productsError } = await supabaseAdmin
@@ -222,6 +213,7 @@ export async function POST(request: Request) {
 
     await assertStripeConfiguration();
 
+    const pickupIso = pickupAt.toISOString();
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -229,13 +221,11 @@ export async function POST(request: Request) {
       phone_number_collection: { enabled: false },
       payment_intent_data: {
         receipt_email: body.customerEmail.toLowerCase(),
-        metadata: { order_id: order.id, pickup_at: pickupAt ? pickupAt.toISOString() : '' }
+        metadata: { order_id: order.id, pickup_at: pickupIso }
       },
       line_items: orderItems.map((item) => {
         const rawImage = typeof item.image_url === 'string' ? item.image_url.trim() : '';
-        const imageUrl = rawImage
-          ? (/^https?:\/\//i.test(rawImage) ? rawImage : `${siteUrl}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`)
-          : undefined;
+        const imageUrl = rawImage ? (/^https?:\/\//i.test(rawImage) ? rawImage : `${siteUrl}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`) : undefined;
         return {
           quantity: item.quantity,
           price_data: {
@@ -245,7 +235,7 @@ export async function POST(request: Request) {
           }
         };
       }),
-      metadata: { order_id: order.id, order_token: order.order_token, pickup_at: pickupAt ? pickupAt.toISOString() : '' },
+      metadata: { order_id: order.id, order_token: order.order_token, pickup_at: pickupIso },
       success_url: `${siteUrl}/checkout/success?order=${order.id}&token=${order.order_token}`,
       cancel_url: `${siteUrl}/checkout/cancel?order=${order.id}&token=${order.order_token}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60
@@ -253,7 +243,7 @@ export async function POST(request: Request) {
 
     const { error: updateError } = await supabaseAdmin.from('orders').update({ stripe_session_id: session.id, updated_at: new Date().toISOString() }).eq('id', order.id);
     if (updateError) throw updateError;
-    await appendOrderEvent({ orderId: order.id, eventType: 'checkout.created', actorType: 'customer', metadata: { stripeSessionId: session.id, pickupAt: pickupAt?.toISOString() || null } });
+    await appendOrderEvent({ orderId: order.id, eventType: 'checkout.created', actorType: 'customer', metadata: { stripeSessionId: session.id, pickupAt: pickupIso } });
 
     return NextResponse.json({ ok: true, url: session.url, orderId: order.id });
   } catch (error: any) {
