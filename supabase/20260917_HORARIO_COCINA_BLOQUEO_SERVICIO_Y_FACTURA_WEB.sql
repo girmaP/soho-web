@@ -6,15 +6,17 @@
 alter table public.business_settings
   add column if not exists kitchen_hours jsonb;
 
+-- La primera carga conserva exactamente el horario actual como un único turno.
+-- El segundo turno queda creado pero desactivado hasta que SOHO configure sus horas reales.
 update public.business_settings
 set kitchen_hours = coalesce(kitchen_hours, jsonb_build_object(
-  '1', jsonb_build_object('closed', false, 'lunch', jsonb_build_object('open','13:00','close','16:00','enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',true)),
-  '2', jsonb_build_object('closed', false, 'lunch', jsonb_build_object('open','13:00','close','16:00','enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',true)),
-  '3', jsonb_build_object('closed', false, 'lunch', jsonb_build_object('open','13:00','close','16:00','enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',true)),
-  '4', jsonb_build_object('closed', false, 'lunch', jsonb_build_object('open','13:00','close','16:00','enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',true)),
-  '5', jsonb_build_object('closed', false, 'lunch', jsonb_build_object('open','13:00','close','16:00','enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',true)),
-  '6', jsonb_build_object('closed', false, 'lunch', jsonb_build_object('open','13:00','close','16:00','enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',true)),
-  '0', jsonb_build_object('closed', false, 'lunch', jsonb_build_object('open','13:00','close','16:00','enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',true))
+  '1', jsonb_build_object('closed', coalesce((weekly_hours->'1'->>'closed')::boolean, false), 'lunch', jsonb_build_object('open',coalesce(weekly_hours->'1'->>'open','09:00'),'close',coalesce(weekly_hours->'1'->>'close','01:00'),'enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',false)),
+  '2', jsonb_build_object('closed', coalesce((weekly_hours->'2'->>'closed')::boolean, false), 'lunch', jsonb_build_object('open',coalesce(weekly_hours->'2'->>'open','09:00'),'close',coalesce(weekly_hours->'2'->>'close','01:00'),'enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',false)),
+  '3', jsonb_build_object('closed', coalesce((weekly_hours->'3'->>'closed')::boolean, false), 'lunch', jsonb_build_object('open',coalesce(weekly_hours->'3'->>'open','09:00'),'close',coalesce(weekly_hours->'3'->>'close','01:00'),'enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',false)),
+  '4', jsonb_build_object('closed', coalesce((weekly_hours->'4'->>'closed')::boolean, false), 'lunch', jsonb_build_object('open',coalesce(weekly_hours->'4'->>'open','09:00'),'close',coalesce(weekly_hours->'4'->>'close','01:00'),'enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',false)),
+  '5', jsonb_build_object('closed', coalesce((weekly_hours->'5'->>'closed')::boolean, false), 'lunch', jsonb_build_object('open',coalesce(weekly_hours->'5'->>'open','09:00'),'close',coalesce(weekly_hours->'5'->>'close','01:00'),'enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',false)),
+  '6', jsonb_build_object('closed', coalesce((weekly_hours->'6'->>'closed')::boolean, false), 'lunch', jsonb_build_object('open',coalesce(weekly_hours->'6'->>'open','10:00'),'close',coalesce(weekly_hours->'6'->>'close','01:00'),'enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',false)),
+  '0', jsonb_build_object('closed', coalesce((weekly_hours->'0'->>'closed')::boolean, false), 'lunch', jsonb_build_object('open',coalesce(weekly_hours->'0'->>'open','10:00'),'close',coalesce(weekly_hours->'0'->>'close','01:00'),'enabled',true), 'dinner', jsonb_build_object('open','20:00','close','23:30','enabled',false))
 ))
 where id = 'main';
 
