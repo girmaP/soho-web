@@ -1,4 +1,5 @@
--- SOHO Cambados · numeración anual de facturas solicitadas.
+-- SOHO Cambados · numeración correlativa de facturas web.
+-- Formato final: F-WEB-0001, F-WEB-0002, F-WEB-0003...
 -- Ejecutar una sola vez en Supabase.
 
 alter table public.orders
@@ -21,17 +22,15 @@ security definer
 set search_path = public
 as $$
 declare
-  v_year integer;
   v_number integer;
 begin
   if new.invoice_requested = true
      and new.payment_status = 'paid'
      and new.invoice_number is null then
 
-    v_year := extract(year from coalesce(new.paid_at, now()))::integer;
-
+    -- La clave 0 se reserva para la serie única de facturas WEB.
     insert into public.invoice_counters (year, last_number, updated_at)
-    values (v_year, 1, now())
+    values (0, 1, now())
     on conflict (year)
     do update
       set last_number = public.invoice_counters.last_number + 1,
@@ -39,9 +38,8 @@ begin
     returning last_number into v_number;
 
     new.invoice_number := format(
-      'F-%s-%s',
-      v_year,
-      lpad(v_number::text, 6, '0')
+      'F-WEB-%s',
+      lpad(v_number::text, 4, '0')
     );
   end if;
 
@@ -57,8 +55,7 @@ on public.orders
 for each row
 execute function public.assign_invoice_number();
 
--- Asigna número a facturas ya pagadas que todavía no tengan uno.
--- Se procesan por fecha de pago/creación para mantener un orden estable.
+-- Asigna número únicamente a facturas pagadas que todavía no tengan uno.
 do $$
 declare
   r record;
