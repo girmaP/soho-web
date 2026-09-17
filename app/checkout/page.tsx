@@ -7,7 +7,15 @@ import { Building2, Check, Clock3, ReceiptText, Truck } from 'lucide-react';
 import { getCart, saveCart } from '@/lib/cartStorage';
 import { CartItem } from '@/types/cart';
 import { formatPrice } from '@/utils/formatPrice';
-import { BusinessSettings, businessHoursLabelFromSettings, defaultBusinessSettings, getBusinessSettings, isBusinessOpenFromSettings } from '@/lib/businessConfig';
+import {
+  BusinessSettings,
+  businessHoursLabelFromSettings,
+  defaultBusinessSettings,
+  getBusinessSettings,
+  isBusinessOpenFromSettings,
+  isKitchenOpenFromSettings,
+  nextKitchenPickupAt
+} from '@/lib/businessConfig';
 import { customizationLabel } from '@/lib/productCustomization';
 import { siteConfig } from '@/lib/siteConfig';
 
@@ -17,11 +25,10 @@ type PickupOption = { value: string; label: string };
 const CHECKOUT_ATTEMPT_KEY = 'soho_checkout_attempt_id';
 
 function getCheckoutAttemptId() {
-  const key = CHECKOUT_ATTEMPT_KEY;
-  const current = window.sessionStorage.getItem(key);
+  const current = window.sessionStorage.getItem(CHECKOUT_ATTEMPT_KEY);
   if (current) return current;
   const next = crypto.randomUUID();
-  window.sessionStorage.setItem(key, next);
+  window.sessionStorage.setItem(CHECKOUT_ATTEMPT_KEY, next);
   return next;
 }
 
@@ -49,18 +56,16 @@ function pickupTimeLabel(date: Date) {
 }
 
 function buildPickupOptions(settings: BusinessSettings): PickupOption[] {
-  const minimumWait = Math.min(180, Math.max(5, Number(settings.default_wait_minutes || 30)));
-  let cursor = roundUpToQuarterHour(new Date(Date.now() + minimumWait * 60_000));
-  const options: PickupOption[] = [];
-  let foundOpenSlot = false;
+  const fastest = nextKitchenPickupAt(settings, new Date());
+  if (!fastest) return [];
 
-  for (let index = 0; index < 96; index += 1) {
-    const open = isBusinessOpenFromSettings(settings, cursor);
-    if (open) {
-      foundOpenSlot = true;
+  let cursor = roundUpToQuarterHour(fastest);
+  const end = new Date(Date.now() + 24 * 60 * 60_000);
+  const options: PickupOption[] = [];
+
+  while (cursor <= end) {
+    if (isKitchenOpenFromSettings(settings, cursor)) {
       options.push({ value: cursor.toISOString(), label: pickupTimeLabel(cursor) });
-    } else if (foundOpenSlot) {
-      break;
     }
     cursor = new Date(cursor.getTime() + 15 * 60_000);
   }
@@ -136,8 +141,7 @@ export default function CheckoutPage() {
         const data = await response.json().catch(() => null);
 
         if (
-          response.status === 409 &&
-          mayRenew &&
+          response.status === 409 && mayRenew &&
           (data?.code === 'CHECKOUT_ATTEMPT_RENEWABLE' || data?.code === 'CHECKOUT_ATTEMPT_COMPLETED')
         ) {
           return createSession(renewCheckoutAttemptId(), false);
@@ -155,6 +159,7 @@ export default function CheckoutPage() {
   }
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+  const fastestPickup = useMemo(() => settingsLoaded ? nextKitchenPickupAt(settings, new Date()) : null, [settings, settingsLoaded]);
   const pickupOptions = useMemo(() => settingsLoaded && openNow ? buildPickupOptions(settings) : [], [settings, settingsLoaded, openNow]);
 
   return (
@@ -201,15 +206,16 @@ export default function CheckoutPage() {
                   name="pickupAt"
                   value={pickupAt}
                   onChange={(event) => setPickupAt(event.target.value)}
-                  className="min-h-12 rounded-2xl border border-black/15 bg-white px-4 font-semibold text-neutral-900 outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100"
+                  disabled={!fastestPickup}
+                  className="min-h-12 rounded-2xl border border-black/15 bg-white px-4 font-semibold text-neutral-900 outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100 disabled:opacity-60"
                 >
-                  <option value="">Lo antes posible (aprox. {settings.default_wait_minutes} min)</option>
+                  <option value="">{fastestPickup ? `Lo antes posible (aprox. ${pickupTimeLabel(fastestPickup)})` : 'Sin horario de cocina disponible'}</option>
                   {pickupOptions.map((option) => (
                     <option key={option.value} value={option.value}>Recoger a las {option.label}</option>
                   ))}
                 </select>
                 <span className="text-xs font-medium leading-5 text-neutral-600">
-                  Elige cuándo quieres recoger tu pedido. Si prefieres «lo antes posible», te indicaremos una hora estimada. Solo aparecen horas disponibles dentro del horario de SOHO y con el tiempo mínimo de preparación necesario.
+                  Puedes pedir aunque la cocina todavía esté cerrada. «Lo antes posible» se programa automáticamente para la primera hora viable de cocina más el tiempo de preparación. Las demás opciones solo muestran horas dentro del horario de cocina.
                 </span>
               </label>
 
@@ -249,7 +255,7 @@ export default function CheckoutPage() {
               <label className="grid gap-1.5 font-bold">Notas u observaciones<textarea name="notes" maxLength={500} className="min-h-28 rounded-2xl border border-black/15 p-4 font-normal outline-none focus:border-[#049ca5] focus:ring-4 focus:ring-cyan-100" placeholder="Sin cebolla, poco hecho, sin salsa..." /></label>
               <label className="flex items-start gap-3 rounded-2xl p-1 text-sm leading-5"><input name="privacy" type="checkbox" required className="mt-0.5 h-5 w-5 shrink-0 accent-[#049ca5]" /><span>Acepto que SOHO use mis datos únicamente para gestionar este pedido y sus comunicaciones.</span></label>
               {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 font-semibold text-red-700">{error}</p>}
-              <button type="submit" disabled={loading || !settingsLoaded || !cart.length || !openNow} className="min-h-14 rounded-2xl bg-[#049ca5] px-5 font-black text-white transition hover:bg-[#03868e] disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="submit" disabled={loading || !settingsLoaded || !cart.length || !openNow || !fastestPickup} className="min-h-14 rounded-2xl bg-[#049ca5] px-5 font-black text-white transition hover:bg-[#03868e] disabled:cursor-not-allowed disabled:opacity-50">
                 {loading ? 'Preparando el pago seguro…' : 'Continuar al pago'}
               </button>
             </form>
