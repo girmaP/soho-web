@@ -29,3 +29,201 @@ button, a { -webkit-tap-highlight-color: transparent; }
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* SOHO motion system ------------------------------------------------------- */
+:root {
+  --soho-scroll: 0;
+  --soho-pointer-x: 50vw;
+  --soho-pointer-y: 50vh;
+  --soho-ease: cubic-bezier(.2,.8,.2,1);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at var(--soho-pointer-x) var(--soho-pointer-y), rgba(4,156,165,.055), transparent 24rem),
+    #fff7ed;
+}
+
+.soho-scroll-progress {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 120;
+  width: calc(var(--soho-scroll) * 100%);
+  height: 3px;
+  pointer-events: none;
+  background: linear-gradient(90deg, #049ca5, #ff6b1a);
+  box-shadow: 0 0 18px rgba(4,156,165,.45);
+  transform-origin: left center;
+}
+
+.soho-reveal {
+  opacity: 0;
+  transform: translateY(18px) scale(.992);
+  filter: blur(3px);
+  transition:
+    opacity 650ms var(--soho-ease) var(--soho-reveal-delay, 0ms),
+    transform 650ms var(--soho-ease) var(--soho-reveal-delay, 0ms),
+    filter 650ms var(--soho-ease) var(--soho-reveal-delay, 0ms);
+}
+
+.soho-reveal.soho-reveal-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+main {
+  animation: soho-page-in 420ms var(--soho-ease) both;
+}
+
+header {
+  transition: box-shadow 250ms ease, background-color 250ms ease, border-color 250ms ease;
+}
+
+header:hover {
+  box-shadow: 0 10px 35px rgba(15,23,42,.08);
+}
+
+header nav a,
+footer a {
+  position: relative;
+  transition: color 180ms ease, transform 180ms ease, opacity 180ms ease;
+}
+
+header nav a:hover,
+footer a:hover {
+  transform: translateY(-1px);
+}
+
+button,
+a[class*="rounded"],
+[role="button"] {
+  transition:
+    transform 180ms var(--soho-ease),
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+button:not(:disabled):active,
+a[class*="rounded"]:active,
+[role="button"]:active {
+  transform: scale(.975);
+}
+
+input,
+textarea,
+select {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  transform: translateY(-1px);
+}
+
+[data-motion-card],
+article[class*="rounded"],
+main section > div[class*="rounded"] {
+  will-change: transform;
+}
+
+.soho-interactive-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.soho-interactive-card::after {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  z-index: -1;
+  opacity: 0;
+  background: radial-gradient(circle, rgba(255,255,255,.7), transparent 35%);
+  transform: translate3d(-25%, -25%, 0) scale(.8);
+  transition: opacity 280ms ease, transform 500ms var(--soho-ease);
+}
+
+.soho-interactive-card:hover::after {
+  opacity: .45;
+  transform: translate3d(20%, 15%, 0) scale(1.15);
+}
+
+.soho-float {
+  animation: soho-float 5.8s ease-in-out infinite;
+}
+
+.soho-hero-zoom {
+  animation: soho-hero-zoom 16s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.soho-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.soho-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-130%);
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.4) 48%, transparent 76%);
+  animation: soho-shimmer 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes soho-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes soho-float {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes soho-hero-zoom {
+  from { transform: scale(1.015); }
+  to { transform: scale(1.085); }
+}
+
+@keyframes soho-shimmer {
+  0%, 22% { transform: translateX(-130%); }
+  72%, 100% { transform: translateX(130%); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .soho-lift:hover {
+    transform: translateY(-6px) scale(1.01);
+    box-shadow: 0 22px 50px rgba(15,23,42,.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .soho-reveal,
+  .soho-reveal.soho-reveal-visible {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .soho-float,
+  .soho-hero-zoom,
+  .soho-shimmer::after,
+  main {
+    animation: none !important;
+  }
+}
