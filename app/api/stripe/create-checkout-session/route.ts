@@ -61,12 +61,15 @@ function sameText(a: string, b: string) {
 
 export async function POST(request: Request) {
   let createdOrderId: string | null = null;
+  let failureStage = 'request_validation';
   try {
     const parsed = requestSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message || 'Datos no válidos.' }, { status: 400 });
     const body = parsed.data;
 
-    const { data: existingOrder } = await supabaseAdmin.from('orders').select('id,order_token,stripe_session_id,status,payment_status').eq('checkout_attempt_id', body.checkoutAttemptId).maybeSingle();
+    failureStage = 'existing_order_lookup';
+    const { data: existingOrder, error: existingOrderError } = await supabaseAdmin.from('orders').select('id,order_token,stripe_session_id,status,payment_status').eq('checkout_attempt_id', body.checkoutAttemptId).maybeSingle();
+    if (existingOrderError) throw existingOrderError;
     if (existingOrder) {
       if (existingOrder.stripe_session_id) {
         const existingSession = await stripe.checkout.sessions.retrieve(existingOrder.stripe_session_id);
@@ -80,7 +83,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, code: 'CHECKOUT_ATTEMPT_RENEWABLE', error: 'El intento anterior ya no está activo. Se iniciará uno nuevo.' }, { status: 409 });
     }
 
-    const { data: settings } = await supabaseAdmin.from('business_settings').select('*').eq('id', 'main').maybeSingle();
+    failureStage = 'settings_lookup';
+    const { data: settings, error: settingsError } = await supabaseAdmin.from('business_settings').select('*').eq('id', 'main').maybeSingle();
+    if (settingsError) throw settingsError;
     const businessSettings = { ...defaultBusinessSettings, ...(settings || {}) } as any;
     if (!isBusinessOpenFromSettings(businessSettings)) {
       return NextResponse.json({ ok: false, error: 'SOHO no acepta pedidos online en este momento.' }, { status: 409 });
@@ -111,8 +116,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const initialEstimatedMinutes = Math.max(5, Math.ceil((pickupAt.getTime() - nowMs) / 60_000));
+    const initialEstimatedMinutes = Math.min(10_080, Math.max(5, Math.ceil((pickupAt.getTime() - nowMs) / 60_000)));
 
+    failureStage = 'catalog_lookup';
     const ids = [...new Set(body.items.map((item) => item.product_id))];
     const { data: products, error: productsError } = await supabaseAdmin
       .from('products').select('id,name,price,image_url,available,vat_rate,categories(name)').in('id', ids);
@@ -176,6 +182,7 @@ export async function POST(request: Request) {
     const total = Number(orderItems.reduce((sum, item) => sum + item.total_price, 0).toFixed(2));
     const siteUrl = siteUrlFromRequest(request);
 
+    failureStage = 'order_insert';
     const { data: order, error: orderError } = await supabaseAdmin.from('orders').insert({
       customer_name: body.customerName,
       customer_phone: body.customerPhone,
@@ -199,6 +206,7 @@ export async function POST(request: Request) {
     if (orderError) throw orderError;
     createdOrderId = order.id;
 
+    failureStage = 'order_items_insert';
     const { error: itemsError } = await supabaseAdmin.from('order_items').insert(orderItems.map((item) => ({
       order_id: order.id,
       product_id: item.product_id,
@@ -211,9 +219,11 @@ export async function POST(request: Request) {
     })));
     if (itemsError) throw itemsError;
 
+    failureStage = 'stripe_configuration';
     await assertStripeConfiguration();
 
     const pickupIso = pickupAt.toISOString();
+    failureStage = 'stripe_session_create';
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -223,34 +233,49 @@ export async function POST(request: Request) {
         receipt_email: body.customerEmail.toLowerCase(),
         metadata: { order_id: order.id, pickup_at: pickupIso }
       },
-      line_items: orderItems.map((item) => {
-        const rawImage = typeof item.image_url === 'string' ? item.image_url.trim() : '';
-        const imageUrl = rawImage ? (/^https?:\/\//i.test(rawImage) ? rawImage : `${siteUrl}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`) : undefined;
-        return {
-          quantity: item.quantity,
-          price_data: {
-            currency: 'eur',
-            unit_amount: Math.round(item.unit_price * 100),
-            product_data: { name: item.product_name.slice(0, 127), images: imageUrl ? [imageUrl] : undefined }
-          }
-        };
-      }),
+      line_items: orderItems.map((item) => ({
+        quantity: item.quantity,
+        price_data: {
+          currency: 'eur',
+          unit_amount: Math.round(item.unit_price * 100),
+          product_data: { name: item.product_name.slice(0, 127) }
+        }
+      })),
       metadata: { order_id: order.id, order_token: order.order_token, pickup_at: pickupIso },
       success_url: `${siteUrl}/checkout/success?order=${order.id}&token=${order.order_token}`,
       cancel_url: `${siteUrl}/checkout/cancel?order=${order.id}&token=${order.order_token}`,
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60
     }, { idempotencyKey: `checkout-order-${order.id}` });
 
+    if (!session.url) throw new Error('Stripe no devolvió una URL de Checkout.');
+
+    failureStage = 'stripe_session_persist';
     const { error: updateError } = await supabaseAdmin.from('orders').update({ stripe_session_id: session.id, updated_at: new Date().toISOString() }).eq('id', order.id);
     if (updateError) throw updateError;
-    await appendOrderEvent({ orderId: order.id, eventType: 'checkout.created', actorType: 'customer', metadata: { stripeSessionId: session.id, pickupAt: pickupIso } });
+
+    await appendOrderEvent({
+      orderId: order.id,
+      eventType: 'checkout.created',
+      actorType: 'customer',
+      metadata: { stripeSessionId: session.id, pickupAt: pickupIso }
+    }).catch((eventError) => console.error('order_event_append_failed', {
+      orderId: order.id,
+      stage: 'checkout.created',
+      error: eventError?.message
+    }));
 
     return NextResponse.json({ ok: true, url: session.url, orderId: order.id });
   } catch (error: any) {
     if (createdOrderId) {
       await supabaseAdmin.from('orders').update({ status: 'cancelled', payment_status: 'failed', cancellation_reason: 'No se pudo iniciar el pago.', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', createdOrderId);
     }
-    console.error('checkout_session_create_failed', { orderId: createdOrderId, error: error?.message });
+    console.error('checkout_session_create_failed', {
+      orderId: createdOrderId,
+      stage: failureStage,
+      error: error?.message,
+      code: error?.code || null,
+      type: error?.type || null
+    });
     return NextResponse.json({ ok: false, error: 'No se pudo iniciar el pago. Intentalo de nuevo.' }, { status: 500 });
   }
 }
