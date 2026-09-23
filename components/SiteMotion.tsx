@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 export function SiteMotion() {
+  const pathname = usePathname();
+
   useEffect(() => {
     const root = document.documentElement;
     const progress = document.createElement('div');
@@ -54,7 +57,7 @@ export function SiteMotion() {
       window.removeEventListener('pointermove', onPointerMove);
       progress.remove();
     };
-  }, []);
+  }, [pathname]);
 
   return null;
 }
