@@ -227,3 +227,27 @@ main section > div[class*="rounded"] {
     animation: none !important;
   }
 }
+
+
+@keyframes soho-admin-section {
+  from { opacity: 0; transform: translateY(10px) scale(.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes soho-skeleton-shift {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.soho-skeleton {
+  background: linear-gradient(90deg, #e5e7eb 20%, #f8fafc 40%, #e5e7eb 60%);
+  background-size: 200% 100%;
+  animation: soho-skeleton-shift 1.35s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="soho-admin-section"],
+  .soho-skeleton {
+    animation: none !important;
+  }
+}
