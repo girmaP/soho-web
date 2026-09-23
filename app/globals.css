@@ -62,18 +62,12 @@ body {
 
 .soho-reveal {
   opacity: 0;
-  transform: translateY(18px) scale(.992);
-  filter: blur(3px);
   transition:
-    opacity 650ms var(--soho-ease) var(--soho-reveal-delay, 0ms),
-    transform 650ms var(--soho-ease) var(--soho-reveal-delay, 0ms),
-    filter 650ms var(--soho-ease) var(--soho-reveal-delay, 0ms);
+    opacity 520ms var(--soho-ease) var(--soho-reveal-delay, 0ms);
 }
 
 .soho-reveal.soho-reveal-visible {
   opacity: 1;
-  transform: translateY(0) scale(1);
-  filter: blur(0);
 }
 
 main {
@@ -222,8 +216,6 @@ main section > div[class*="rounded"] {
   .soho-reveal,
   .soho-reveal.soho-reveal-visible {
     opacity: 1 !important;
-    transform: none !important;
-    filter: none !important;
   }
   .soho-float,
   .soho-hero-zoom,
