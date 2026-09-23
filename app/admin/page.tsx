@@ -882,9 +882,9 @@ export default function AdminPage() {
               <button
                 key={item.id}
                 onClick={() => setSection(item.id as AdminSection)}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${section === item.id ? 'bg-white text-neutral-950 shadow-xl shadow-black/10' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition duration-300 ${section === item.id ? 'translate-x-1 bg-white text-neutral-950 shadow-xl shadow-black/10' : 'text-white/70 hover:translate-x-1 hover:bg-white/10 hover:text-white'}`}
               >
-                <span className={`grid h-8 w-8 place-items-center rounded-xl ${section === item.id ? 'bg-cyan-50 text-[#049ca5]' : 'bg-white/10 text-white/70'}`}><item.icon size={17} aria-hidden="true" /></span>
+                <span className={`grid h-8 w-8 place-items-center rounded-xl transition duration-300 group-hover:rotate-[-4deg] group-hover:scale-110 ${section === item.id ? 'bg-cyan-50 text-[#049ca5]' : 'bg-white/10 text-white/70'}`}><item.icon size={17} aria-hidden="true" /></span>
                 {item.label}
               </button>
             ))}
@@ -902,7 +902,7 @@ export default function AdminPage() {
           </div>
         </aside>
 
-        <section className="min-w-0 p-5 lg:p-8">
+        <section key={section} className="min-w-0 animate-[soho-admin-section_360ms_cubic-bezier(.2,.8,.2,1)_both] p-5 lg:p-8">
           {section === 'dashboard' && (
             <section>
               <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
