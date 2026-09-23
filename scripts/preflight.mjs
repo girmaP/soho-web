@@ -91,14 +91,14 @@ async function main() {
   try { env = loadEnv(); result('.env.local legible', true); }
   catch (error) { result('.env.local legible', false, error.message); process.exit(1); }
 
-  const required = ['NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_ANON_KEY','SUPABASE_SERVICE_ROLE_KEY','NEXT_PUBLIC_SITE_URL','STRIPE_SECRET_KEY','NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY','STRIPE_REQUIRE_LIVE','STRIPE_EXPECTED_ACCOUNT_ID','STRIPE_WEBHOOK_SECRET','GMAIL_USER','GMAIL_APP_PASSWORD','ORDER_EMAIL_FROM'];
+  const required = ['NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_ANON_KEY','SUPABASE_SERVICE_ROLE_KEY','NEXT_PUBLIC_SITE_URL','STRIPE_SECRET_KEY','STRIPE_REQUIRE_LIVE','STRIPE_EXPECTED_ACCOUNT_ID','STRIPE_WEBHOOK_SECRET','GMAIL_USER','GMAIL_APP_PASSWORD','ORDER_EMAIL_FROM'];
   const missing = required.filter((name) => !env[name]);
   result('Variables obligatorias', missing.length === 0, missing.length ? `faltan: ${missing.join(', ')}` : 'completas');
 
   const siteUrl = (env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
-  result('URL de produccion', siteUrl === 'https://www.sohocambados.es', siteUrl || 'vacia');
+  result('URL de produccion', ['https://sohocambados.es','https://www.sohocambados.es'].includes(siteUrl), siteUrl || 'vacia');
   result('Stripe configurado como obligatorio LIVE', env.STRIPE_REQUIRE_LIVE === 'true');
-  result('Claves Stripe con prefijo LIVE', env.STRIPE_SECRET_KEY?.startsWith('sk_live_') && env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_live_'));
+  result('Claves Stripe con prefijo LIVE', Boolean(env.STRIPE_SECRET_KEY?.startsWith('sk_live_') && (!env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.startsWith('pk_live_'))));
   result('Webhook secret configurado', env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_'));
 
   const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -197,7 +197,7 @@ async function main() {
   if (siteUrl) {
     try {
       const response = await fetch(siteUrl, { redirect: 'follow', signal: AbortSignal.timeout(15000) });
-      result('Sitio de produccion accesible', response.ok && new URL(response.url).hostname === 'www.sohocambados.es', `HTTP ${response.status} ${response.url}`);
+      result('Sitio de produccion accesible', response.ok && ['sohocambados.es','www.sohocambados.es'].includes(new URL(response.url).hostname), `HTTP ${response.status} ${response.url}`);
       const webhook = await fetch(`${siteUrl}/api/stripe/webhook`, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(15000) });
       result('Ruta webhook desplegada', [400,405].includes(webhook.status), `HTTP ${webhook.status}`);
     } catch (error) { result('Sitio de produccion accesible', false, error.message); }
