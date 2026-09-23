@@ -325,7 +325,7 @@ insert into public.invoice_web_counter(id,last_number) values(1,0) on conflict(i
 create or replace function public.assign_invoice_number()
 returns trigger
 language plpgsql security definer set search_path=public
-as $
+as $body$
 declare v_number integer;
 begin
   if new.invoice_requested = true and new.payment_status = 'paid' and new.invoice_number is null then
@@ -336,7 +336,7 @@ begin
     new.invoice_number := format('F-WEB-%s',lpad(v_number::text,4,'0'));
   end if;
   return new;
-end $;
+end $body$;
 revoke all on function public.assign_invoice_number() from public;
 
 drop trigger if exists orders_assign_invoice_number on public.orders;
@@ -366,13 +366,13 @@ where id='main';
 create or replace function public.lock_service_start_date()
 returns trigger
 language plpgsql security definer set search_path=public
-as $
+as $body$
 begin
   if old.service_start_date is not null and new.service_start_date is distinct from old.service_start_date then
     new.service_start_date := old.service_start_date;
   end if;
   return new;
-end $;
+end $body$;
 revoke all on function public.lock_service_start_date() from public;
 
 drop trigger if exists business_settings_lock_service_start_date on public.business_settings;
