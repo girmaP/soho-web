@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { siteConfig } from '@/lib/siteConfig';
+import { SiteMotion } from '@/components/SiteMotion';
 import {
   Facebook,
   Instagram,
@@ -115,6 +116,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
+        <SiteMotion />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -122,7 +124,7 @@ export default function RootLayout({
           }}
         />
 
-        <header className="sticky top-0 z-40 h-[72px] overflow-visible border-b border-black/5 bg-white/95 backdrop-blur-xl">
+        <header className="sticky top-0 z-40 h-[72px] overflow-visible border-b border-black/5 bg-white/90 shadow-sm shadow-black/[0.02] backdrop-blur-2xl">
           <nav
             className="relative mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-3 px-4"
             aria-label="Navegación principal"
@@ -135,11 +137,11 @@ export default function RootLayout({
               <img
                 src={siteConfig.logoPath}
                 alt="SOHO Cambados"
-                className="h-auto w-36 object-contain sm:w-44"
+                className="h-auto w-36 object-contain transition duration-300 hover:scale-[1.04] sm:w-44"
               />
             </Link>
 
-            <div className="flex items-center gap-3 text-sm font-bold sm:gap-5">
+            <div className="flex items-center gap-3 text-sm font-bold sm:gap-5 [&_a]:rounded-xl [&_a]:px-2 [&_a]:py-2 [&_a]:transition [&_a:hover]:bg-cyan-50 [&_a:hover]:text-[#047f86]">
               <Link href="/menu">Carta</Link>
               <Link href="/checkout">Carrito</Link>
               <a
@@ -155,11 +157,11 @@ export default function RootLayout({
 
         {children}
 
-        <footer className="bg-[#111214] text-white">
-          <div className="mx-auto max-w-7xl px-4 py-10">
+        <footer className="relative overflow-hidden bg-[#111214] text-white before:absolute before:-left-32 before:top-0 before:h-80 before:w-80 before:rounded-full before:bg-cyan-500/10 before:blur-3xl after:absolute after:-right-32 after:bottom-0 after:h-72 after:w-72 after:rounded-full after:bg-orange-500/10 after:blur-3xl">
+          <div className="relative mx-auto max-w-7xl px-4 py-10">
             <div className="grid gap-8 border-b border-white/15 pb-8 md:grid-cols-5">
               <div>
-                <div className="inline-grid h-28 w-28 place-items-center rounded-full bg-[#049ca5] p-[3px] shadow-lg shadow-black/25">
+                <div className="soho-float inline-grid h-28 w-28 place-items-center rounded-full bg-[#049ca5] p-[3px] shadow-lg shadow-black/25">
                   <img
                     src={siteConfig.compactLogoPath}
                     alt="SOHO Cambados"
