@@ -39,7 +39,7 @@ grant all on public.invoice_web_counter to service_role;
 
 -- Las funciones de trigger no forman parte de la API pública. Si una instalación
 -- antigua todavía no tiene alguna, no hacemos fallar esta migración por ello.
-do $
+do $migration$
 begin
   if to_regprocedure('public.assign_invoice_number()') is not null then
     execute 'revoke all on function public.assign_invoice_number() from public';
@@ -47,7 +47,7 @@ begin
   if to_regprocedure('public.lock_service_start_date()') is not null then
     execute 'revoke all on function public.lock_service_start_date() from public';
   end if;
-end $;
+end $migration$;
 
 -- La vista de diagnóstico debe respetar los permisos del invocador.
 drop view if exists public.soho_production_schema_check;
