@@ -43,7 +43,7 @@ export async function activatePaidOrder(params: {
   const requestedPickupAt = paymentIntent.metadata?.pickup_at?.trim() || '';
   const requestedPickupMs = requestedPickupAt ? new Date(requestedPickupAt).getTime() : NaN;
   const requestedWaitMinutes = Number.isFinite(requestedPickupMs)
-    ? Math.max(5, Math.ceil((requestedPickupMs - nowDate.getTime()) / 60_000))
+    ? Math.min(10_080, Math.max(5, Math.ceil((requestedPickupMs - nowDate.getTime()) / 60_000)))
     : configuredWaitMinutes;
   const waitMinutes = Number.isFinite(requestedPickupMs) && requestedPickupMs > nowDate.getTime()
     ? requestedWaitMinutes
