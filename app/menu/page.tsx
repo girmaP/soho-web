@@ -239,8 +239,8 @@ export default function MenuPage() {
       </div>
 
       {customizing && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="customization-title">
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl md:rounded-[2rem] md:p-7">
+        <div data-soho-modal-root className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 backdrop-blur-[2px] md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="customization-title">
+          <div className="w-full max-w-2xl animate-[soho-sheet-in_280ms_cubic-bezier(.2,.8,.2,1)_both] overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl md:max-h-[92vh] md:rounded-[2rem] md:p-7" style={{ maxHeight: 'min(92dvh, 760px)' }}>
             <div className="flex items-start justify-between gap-4">
               <div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#049ca5]">Personaliza tu pedido</p><h2 id="customization-title" className="mt-1 text-2xl font-black">{customizing.product.name}</h2><p className="mt-1 text-sm text-neutral-500">Precio base: {formatPrice(Number(customizing.product.price))}</p></div>
               <button type="button" onClick={() => setCustomizing(null)} className="rounded-full border px-4 py-2 font-black" aria-label="Cerrar">×</button>
