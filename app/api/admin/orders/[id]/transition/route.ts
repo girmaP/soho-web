@@ -9,7 +9,7 @@ import { automaticPreparingAt, automaticReadyAt, effectiveOrderStatus } from '@/
 
 const schema = z.object({
   status: z.enum(['pending', 'accepted', 'preparing', 'ready', 'delivered', 'cancelled']),
-  estimatedTime: z.number().int().min(5).max(180).nullable().optional(),
+  estimatedTime: z.number().int().min(5).max(10080).nullable().optional(),
   cancellationReason: z.string().trim().max(500).nullable().optional()
 });
 
