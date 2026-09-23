@@ -128,6 +128,54 @@ function timeInsideWindow(now: number, open: number, close: number) {
   return close < open ? now >= open || now <= close : now >= open && now <= close;
 }
 
+function previousDayKey(key: DayKey): DayKey {
+  return String((Number(key) + 6) % 7) as DayKey;
+}
+
+function scheduleIsActiveForInstant(schedules: WeeklyHours, key: DayKey, now: number) {
+  const current = schedules[key];
+  if (current && !current.closed) {
+    const open = minutesFromTime(current.open);
+    const close = minutesFromTime(current.close);
+    if (close >= open && now >= open && now <= close) return true;
+    if (close < open && now >= open) return true;
+  }
+
+  const previous = schedules[previousDayKey(key)];
+  if (previous && !previous.closed) {
+    const open = minutesFromTime(previous.open);
+    const close = minutesFromTime(previous.close);
+    if (close < open && now <= close) return true;
+  }
+
+  return false;
+}
+
+function kitchenIsActiveForInstant(hours: KitchenHours, key: DayKey, now: number) {
+  const current = hours[key];
+  if (current && !current.closed) {
+    for (const shift of [current.lunch, current.dinner]) {
+      if (!shift.enabled) continue;
+      const open = minutesFromTime(shift.open);
+      const close = minutesFromTime(shift.close);
+      if (close >= open && now >= open && now <= close) return true;
+      if (close < open && now >= open) return true;
+    }
+  }
+
+  const previous = hours[previousDayKey(key)];
+  if (previous && !previous.closed) {
+    for (const shift of [previous.lunch, previous.dinner]) {
+      if (!shift.enabled) continue;
+      const open = minutesFromTime(shift.open);
+      const close = minutesFromTime(shift.close);
+      if (close < open && now <= close) return true;
+    }
+  }
+
+  return false;
+}
+
 export async function getBusinessSettings(): Promise<BusinessSettings> {
   const { data, error } = await supabase.from('business_settings').select('*').eq('id', 'main').maybeSingle();
   if (error || !data) return defaultBusinessSettings;
@@ -156,23 +204,16 @@ export function isBusinessOpenFromSettings(rawSettings: BusinessSettings, date =
   settings.weekly_hours = normalizeWeeklyHours(rawSettings?.weekly_hours, settings);
   if (settings.manual_pause) return false;
   const { key, hour, minute } = madridParts(date);
-  const schedule = settings.weekly_hours[key] || defaultWeeklyHours[key];
-  if (schedule.closed) return false;
   const now = hour * 60 + minute;
-  return timeInsideWindow(now, minutesFromTime(schedule.open), minutesFromTime(schedule.close));
+  return scheduleIsActiveForInstant(settings.weekly_hours, key, now);
 }
 
 export function isKitchenOpenFromSettings(rawSettings: BusinessSettings, date = new Date()) {
   const settings = { ...defaultBusinessSettings, ...rawSettings } as BusinessSettings;
   settings.kitchen_hours = normalizeKitchenHours(rawSettings?.kitchen_hours);
   const { key, hour, minute } = madridParts(date);
-  const day = settings.kitchen_hours[key] || defaultKitchenHours[key];
-  if (day.closed) return false;
   const now = hour * 60 + minute;
-  return [day.lunch, day.dinner].some((shift) => {
-    if (!shift.enabled) return false;
-    return timeInsideWindow(now, minutesFromTime(shift.open), minutesFromTime(shift.close));
-  });
+  return kitchenIsActiveForInstant(settings.kitchen_hours, key, now);
 }
 
 function roundUpToFiveMinutes(date: Date) {
