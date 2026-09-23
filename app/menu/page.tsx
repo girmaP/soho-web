@@ -239,54 +239,77 @@ export default function MenuPage() {
       </div>
 
       {customizing && (
-        <div data-soho-modal-root className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 backdrop-blur-[2px] md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="customization-title">
-          <div className="w-full max-w-2xl animate-[soho-sheet-in_280ms_cubic-bezier(.2,.8,.2,1)_both] overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl md:max-h-[92vh] md:rounded-[2rem] md:p-7" style={{ maxHeight: 'min(92dvh, 760px)' }}>
-            <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#049ca5]">Personaliza tu pedido</p><h2 id="customization-title" className="mt-1 text-2xl font-black">{customizing.product.name}</h2><p className="mt-1 text-sm text-neutral-500">Precio base: {formatPrice(Number(customizing.product.price))}</p></div>
-              <button type="button" onClick={() => setCustomizing(null)} className="rounded-full border px-4 py-2 font-black" aria-label="Cerrar">×</button>
+        <div data-soho-modal-root className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-3 backdrop-blur-[2px] md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="customization-title">
+          <div
+            className="flex w-full max-w-xl animate-[soho-sheet-in_280ms_cubic-bezier(.2,.8,.2,1)_both] flex-col overflow-hidden rounded-[1.6rem] bg-white shadow-2xl"
+            style={{ maxHeight: 'min(82dvh, 680px)' }}
+          >
+            <div className="shrink-0 border-b border-black/10 bg-white px-4 py-3.5 sm:px-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#049ca5] sm:text-xs">Personaliza tu pedido</p>
+                  <h2 id="customization-title" className="mt-0.5 truncate text-xl font-black sm:text-2xl">{customizing.product.name}</h2>
+                  <p className="mt-0.5 text-xs font-semibold text-neutral-500 sm:text-sm">Precio base: {formatPrice(Number(customizing.product.price))}</p>
+                </div>
+                <button type="button" onClick={() => setCustomizing(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-black/10 bg-neutral-50 text-xl font-black transition hover:bg-neutral-100" aria-label="Cerrar">×</button>
+              </div>
             </div>
 
-            {customizing.requiredChoices.length > 0 && (
-              <fieldset className="mt-6 rounded-3xl border-2 border-amber-300 bg-amber-50 p-4">
-                <legend className="px-2 text-sm font-black text-amber-950">Elección obligatoria</legend>
-                <p className="mb-3 text-sm text-amber-900">Debes escoger una opción para poder añadir este plato.</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {customizing.requiredChoices.map((choice) => (
-                    <label key={choice} className={`flex cursor-pointer items-center gap-3 rounded-2xl border bg-white p-3 font-bold ${selectedChoice === choice ? 'border-[#049ca5] ring-2 ring-cyan-100' : 'border-black/10'}`}>
-                      <input type="radio" name="required-choice" value={choice} checked={selectedChoice === choice} onChange={() => { setSelectedChoice(choice); setCustomizationError(''); }} />
-                      {choice}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            )}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {customizing.requiredChoices.length > 0 && (
+                <fieldset className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 sm:p-4">
+                  <legend className="px-2 text-xs font-black text-amber-950 sm:text-sm">Elección obligatoria</legend>
+                  <p className="mb-2 text-xs text-amber-900 sm:text-sm">Debes escoger una opción para poder añadir este plato.</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {customizing.requiredChoices.map((choice) => (
+                      <label key={choice} className={`flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-2.5 text-sm font-bold sm:rounded-2xl sm:p-3 ${selectedChoice === choice ? 'border-[#049ca5] ring-2 ring-cyan-100' : 'border-black/10'}`}>
+                        <input type="radio" name="required-choice" value={choice} checked={selectedChoice === choice} onChange={() => { setSelectedChoice(choice); setCustomizationError(''); }} />
+                        {choice}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
 
-            {customizing.extras.length > 0 && (
-              <section className="mt-6">
-                <h3 className="text-lg font-black">Extras opcionales</h3>
-                <p className="text-sm text-neutral-500">Puedes añadir más de una unidad de cada extra.</p>
-                <div className="mt-3 divide-y rounded-3xl border px-4">
-                  {customizing.extras.map((extra) => {
-                    const quantity = Number(extraQuantities[extra.name] || 0);
-                    return (
-                      <div key={extra.name} className="flex items-center justify-between gap-4 py-3">
-                        <div><strong>{extra.name}</strong><p className="text-sm text-neutral-500">{extra.price === 0 ? 'Sin suplemento' : `+${formatPrice(extra.price)}`}</p></div>
-                        <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => setExtraQuantities((current) => ({ ...current, [extra.name]: Math.max(0, quantity - 1) }))} className="h-10 w-10 rounded-xl border font-black">−</button>
-                          <span className="w-6 text-center font-black">{quantity}</span>
-                          <button type="button" onClick={() => setExtraQuantities((current) => ({ ...current, [extra.name]: Math.min(10, quantity + 1) }))} className="h-10 w-10 rounded-xl border font-black">+</button>
+              {customizing.extras.length > 0 && (
+                <section className={customizing.requiredChoices.length > 0 ? 'mt-4' : ''}>
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-black sm:text-lg">Extras opcionales</h3>
+                      <p className="text-xs text-neutral-500 sm:text-sm">Añade las unidades que quieras.</p>
+                    </div>
+                    <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[10px] font-black text-[#047f86] sm:text-xs">{customizing.extras.length} opciones</span>
+                  </div>
+
+                  <div className="mt-2 divide-y rounded-2xl border px-3 sm:px-4">
+                    {customizing.extras.map((extra) => {
+                      const quantity = Number(extraQuantities[extra.name] || 0);
+                      return (
+                        <div key={extra.name} className="flex items-center justify-between gap-3 py-2.5 sm:py-3">
+                          <div className="min-w-0">
+                            <strong className="block truncate text-sm sm:text-base">{extra.name}</strong>
+                            <p className="text-xs text-neutral-500 sm:text-sm">{extra.price === 0 ? 'Sin suplemento' : `+${formatPrice(extra.price)}`}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                            <button type="button" onClick={() => setExtraQuantities((current) => ({ ...current, [extra.name]: Math.max(0, quantity - 1) }))} className="grid h-9 w-9 place-items-center rounded-xl border text-lg font-black sm:h-10 sm:w-10">−</button>
+                            <span className="w-5 text-center text-sm font-black sm:w-6 sm:text-base">{quantity}</span>
+                            <button type="button" onClick={() => setExtraQuantities((current) => ({ ...current, [extra.name]: Math.min(10, quantity + 1) }))} className="grid h-9 w-9 place-items-center rounded-xl border text-lg font-black sm:h-10 sm:w-10">+</button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
 
-            {customizationError && <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-700">{customizationError}</p>}
-            <div className="sticky bottom-0 mt-6 flex gap-3 border-t bg-white pt-4">
-              <button type="button" onClick={() => setCustomizing(null)} className="rounded-2xl border px-5 py-4 font-black">Cancelar</button>
-              <button type="button" onClick={confirmCustomization} className="flex-1 rounded-2xl bg-[#049ca5] px-5 py-4 font-black text-white">Añadir · {formatPrice(customizationTotal)}</button>
+              {customizationError && <p className="mt-3 rounded-2xl bg-red-50 p-3 text-xs font-bold text-red-700 sm:text-sm">{customizationError}</p>}
+            </div>
+
+            <div className="shrink-0 border-t border-black/10 bg-white px-4 py-3 sm:px-5">
+              <div className="flex gap-2.5">
+                <button type="button" onClick={() => setCustomizing(null)} className="min-h-11 rounded-xl border border-black/10 px-4 text-sm font-black sm:rounded-2xl sm:px-5">Cancelar</button>
+                <button type="button" onClick={confirmCustomization} className="min-h-11 flex-1 rounded-xl bg-[#049ca5] px-4 text-sm font-black text-white shadow-sm sm:rounded-2xl sm:px-5">Añadir · {formatPrice(customizationTotal)}</button>
+              </div>
             </div>
           </div>
         </div>
