@@ -37,9 +37,17 @@ alter table public.invoice_web_counter enable row level security;
 revoke all on public.invoice_web_counter from anon, authenticated;
 grant all on public.invoice_web_counter to service_role;
 
--- Las funciones de trigger no forman parte de la API pública.
-revoke all on function public.assign_invoice_number() from public;
-revoke all on function public.lock_service_start_date() from public;
+-- Las funciones de trigger no forman parte de la API pública. Si una instalación
+-- antigua todavía no tiene alguna, no hacemos fallar esta migración por ello.
+do $
+begin
+  if to_regprocedure('public.assign_invoice_number()') is not null then
+    execute 'revoke all on function public.assign_invoice_number() from public';
+  end if;
+  if to_regprocedure('public.lock_service_start_date()') is not null then
+    execute 'revoke all on function public.lock_service_start_date() from public';
+  end if;
+end $;
 
 -- La vista de diagnóstico debe respetar los permisos del invocador.
 drop view if exists public.soho_production_schema_check;
