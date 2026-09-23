@@ -358,10 +358,27 @@ create index if not exists print_jobs_pending_idx on public.print_jobs(created_a
 
 insert into public.business_settings(id) values('main') on conflict(id) do nothing;
 update public.business_settings set
-  service_start_date=coalesce(service_start_date,current_date),
+  service_start_date=coalesce(service_start_date,date '2026-09-17'),
   fiscal_address=case when trim(coalesce(fiscal_address,''))='' then 'Calle A Mariña, 3, 36630 Cambados, Pontevedra' else fiscal_address end,
   admin_email=case when trim(coalesce(admin_email,''))='' then 'sohocambados@gmail.com' else admin_email end
 where id='main';
+
+create or replace function public.lock_service_start_date()
+returns trigger
+language plpgsql security definer set search_path=public
+as $
+begin
+  if old.service_start_date is not null and new.service_start_date is distinct from old.service_start_date then
+    new.service_start_date := old.service_start_date;
+  end if;
+  return new;
+end $;
+revoke all on function public.lock_service_start_date() from public;
+
+drop trigger if exists business_settings_lock_service_start_date on public.business_settings;
+create trigger business_settings_lock_service_start_date
+before update of service_start_date on public.business_settings
+for each row execute function public.lock_service_start_date();
 
 -- Reclamo atomico: solo un proceso maneja cada evento. Los fallidos pueden
 -- reintentarse; los ya procesados o actualmente en curso se ignoran.
