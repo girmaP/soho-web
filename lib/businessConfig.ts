@@ -124,10 +124,6 @@ function madridParts(date: Date) {
   return { key: map[weekday] || '0', hour, minute };
 }
 
-function timeInsideWindow(now: number, open: number, close: number) {
-  return close < open ? now >= open || now <= close : now >= open && now <= close;
-}
-
 function previousDayKey(key: DayKey): DayKey {
   return String((Number(key) + 6) % 7) as DayKey;
 }
