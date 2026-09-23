@@ -32,9 +32,11 @@ export async function assertStripeConfiguration() {
       throw new Error('Stripe debe estar en modo LIVE para esta entrega. Revisa STRIPE_SECRET_KEY.');
     }
 
+    // Hosted Checkout se crea íntegramente en servidor y redirige usando
+    // session.url, por lo que la clave publicable no es necesaria para cobrar.
+    // Si está configurada, la validamos para detectar mezclas test/live.
     const publicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim();
-    if (!publicKey) throw new Error('Falta NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.');
-    if (requireLive && !publicKey.startsWith('pk_live_')) {
+    if (publicKey && requireLive && !publicKey.startsWith('pk_live_')) {
       throw new Error('La clave publicable de Stripe debe ser LIVE. Revisa NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.');
     }
 
