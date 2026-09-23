@@ -510,11 +510,24 @@ begin
     'public.production_preflight()',
     'public.is_admin()',
     'public.submit_contact_message(text,text,text,text)',
-    'public.cleanup_read_contact_messages_older_than_15_days()'
+    'public.cleanup_read_contact_messages_older_than_15_days()',
+    'public.assign_invoice_number()',
+    'public.lock_service_start_date()'
   ] loop
     if to_regprocedure(required_rpc) is null then
       missing := array_append(missing,'rpc:' || required_rpc);
     end if;
+  end loop;
+
+  foreach required_field in array array[
+    'invoice_web_counter.id','invoice_web_counter.last_number','invoice_web_counter.updated_at'
+  ] loop
+    if not exists(
+      select 1 from information_schema.columns
+      where table_schema='public'
+        and table_name=split_part(required_field,'.',1)
+        and column_name=split_part(required_field,'.',2)
+    ) then missing := array_append(missing,required_field); end if;
   end loop;
 
   foreach required_column in array array[
