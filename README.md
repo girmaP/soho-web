@@ -4,7 +4,7 @@ Aplicación de pedidos online de SOHO Cambados. Incluye carta, carrito, cobro se
 
 ## Puesta en producción
 
-1. En una instalación nueva, ejecutar `supabase/SOHO_PRODUCCION_FINAL.sql`. En la base actual, ejecutar `supabase/20260909_DATOS_FACTURACION.sql` y `supabase/20260909_CATEGORIA_SALSAS.sql` antes del despliegue.
+1. En una instalación nueva, ejecutar `supabase/SOHO_PRODUCCION_FINAL.sql`. En la base actual de SOHO, ejecutar también `supabase/20260923_CHECKOUT_HARDENING.sql` para garantizar pedidos programados, numeración F-WEB y bloqueo de la fecha contractual.
 2. Configurar en Vercel las mismas variables de entorno de producción incluidas en `.env.local`. `.env.local` está ignorado por Git.
 3. Confirmar que el webhook LIVE de Stripe apunta a `https://www.sohocambados.es/api/stripe/webhook`.
 4. Ejecutar `npm run preflight`, `npm run typecheck`, `npm run lint` y `npm run build` antes del despliegue.
