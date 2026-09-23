@@ -74,6 +74,28 @@ export default function MenuPage() {
   const showRecommendedDescription = recommendedDescription && !/^producto de la categor[ií]a/i.test(recommendedDescription);
 
   useEffect(() => {
+    if (!customizing) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousWidth = document.body.style.width;
+    const scrollY = window.scrollY;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.top = `-${scrollY}px`;
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.width = previousWidth;
+      document.body.style.top = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, [customizing]);
+
+  useEffect(() => {
     async function loadProducts() {
       try {
         const { data, error } = await supabase.from('products').select('*, categories(name, sort_order)').eq('available', true).order('sort_order', { referencedTable: 'categories' }).order('name');
@@ -239,7 +261,7 @@ export default function MenuPage() {
       </div>
 
       {customizing && (
-        <div data-soho-modal-root className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-3 backdrop-blur-[2px] md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="customization-title">
+        <div data-soho-modal-root className="fixed inset-0 z-[100] flex items-end justify-center overflow-hidden bg-black/60 p-3 backdrop-blur-[2px] md:items-center md:p-5" role="dialog" aria-modal="true" aria-labelledby="customization-title">
           <div
             className="flex w-full max-w-xl animate-[soho-sheet-in_280ms_cubic-bezier(.2,.8,.2,1)_both] flex-col overflow-hidden rounded-[1.6rem] bg-white shadow-2xl"
             style={{ maxHeight: 'min(82dvh, 680px)' }}
@@ -255,7 +277,14 @@ export default function MenuPage() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div
+              className="min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain px-4 py-3 sm:px-5 sm:py-4"
+              style={{
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
+                touchAction: 'pan-y'
+              }}
+            >
               {customizing.requiredChoices.length > 0 && (
                 <fieldset className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 sm:p-4">
                   <legend className="px-2 text-xs font-black text-amber-950 sm:text-sm">Elección obligatoria</legend>
