@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { assertStripeConfiguration, stripe } from '@/lib/stripe';
 import { defaultBusinessSettings, isBusinessOpenFromSettings, isKitchenOpenFromSettings, nextKitchenPickupAt } from '@/lib/businessConfig';
 import { appendOrderEvent } from '@/lib/server/orderEvents';
-import { isHiddenCatalogCategory, resolvedProductImage } from '@/lib/catalogPresentation';
+import { isHiddenCatalogCategory } from '@/lib/catalogPresentation';
 import { customizationLabel, extraProfileForCategory, extrasForCategory, requiredChoicesFromName, selectedExtrasTotal } from '@/lib/productCustomization';
 
 const selectedExtraSchema = z.object({
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     failureStage = 'catalog_lookup';
     const ids = [...new Set(body.items.map((item) => item.product_id))];
     const { data: products, error: productsError } = await supabaseAdmin
-      .from('products').select('id,name,price,image_url,available,vat_rate,categories(name)').in('id', ids);
+      .from('products').select('id,name,price,available,vat_rate,categories(name)').in('id', ids);
     if (productsError) throw productsError;
 
     const productMap = new Map((products || []).map((p: any) => [p.id, p]));
@@ -173,7 +173,6 @@ export async function POST(request: Request) {
         quantity: item.quantity,
         unit_price: unitPrice,
         total_price: Number((unitPrice * item.quantity).toFixed(2)),
-        image_url: resolvedProductImage(product.image_url, categoryName),
         vat_rate: Number(product.vat_rate || 10),
         customizations
       };
