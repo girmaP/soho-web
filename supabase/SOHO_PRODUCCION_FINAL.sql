@@ -55,6 +55,7 @@ create table if not exists public.orders (
   customer_phone text not null,
   customer_email text not null,
   invoice_requested boolean not null default false,
+  invoice_number text,
   billing_tax_id text,
   billing_name text,
   billing_address text,
@@ -83,7 +84,7 @@ create table if not exists public.orders (
   refunded_at timestamptz,
   received_acknowledged_at timestamptz,
   received_acknowledged_by uuid references auth.users(id) on delete set null,
-  estimated_time integer check (estimated_time between 5 and 180),
+  estimated_time integer check (estimated_time between 5 and 10080),
   total_price numeric(10,2) not null check (total_price >= 0),
   refunded_amount numeric(10,2) not null default 0 check (refunded_amount >= 0),
   stripe_fee_amount numeric(10,2) not null default 0 check (stripe_fee_amount >= 0),
@@ -160,7 +161,8 @@ create table if not exists public.business_settings (
   closed_days integer[] not null default '{}',
   minimum_order numeric(10,2) not null default 0,
   default_wait_minutes integer not null default 10 check (default_wait_minutes between 5 and 180),
-  weekly_hours jsonb not null default '{"1":{"open":"09:00","close":"23:30","closed":false},"2":{"open":"09:00","close":"23:30","closed":false},"3":{"open":"09:00","close":"23:30","closed":false},"4":{"open":"09:00","close":"23:30","closed":false},"5":{"open":"09:00","close":"00:30","closed":false},"6":{"open":"09:00","close":"00:30","closed":false},"0":{"open":"09:00","close":"23:30","closed":false}}'::jsonb,
+  weekly_hours jsonb not null default '{"1":{"open":"09:00","close":"01:00","closed":false},"2":{"open":"09:00","close":"01:00","closed":false},"3":{"open":"09:00","close":"01:00","closed":false},"4":{"open":"09:00","close":"01:00","closed":false},"5":{"open":"09:00","close":"01:00","closed":false},"6":{"open":"10:00","close":"01:00","closed":false},"0":{"open":"10:00","close":"01:00","closed":false}}'::jsonb,
+  kitchen_hours jsonb not null default '{"1":{"closed":false,"lunch":{"open":"12:00","close":"15:30","enabled":true},"dinner":{"open":"20:00","close":"23:45","enabled":true}},"2":{"closed":false,"lunch":{"open":"12:00","close":"15:30","enabled":true},"dinner":{"open":"20:00","close":"23:45","enabled":true}},"3":{"closed":false,"lunch":{"open":"12:00","close":"15:30","enabled":true},"dinner":{"open":"20:00","close":"23:45","enabled":true}},"4":{"closed":false,"lunch":{"open":"12:00","close":"15:30","enabled":true},"dinner":{"open":"20:00","close":"23:45","enabled":true}},"5":{"closed":false,"lunch":{"open":"12:00","close":"15:30","enabled":true},"dinner":{"open":"20:00","close":"00:30","enabled":true}},"6":{"closed":false,"lunch":{"open":"12:00","close":"15:30","enabled":true},"dinner":{"open":"20:00","close":"00:30","enabled":true}},"0":{"closed":false,"lunch":{"open":"12:00","close":"15:30","enabled":true},"dinner":{"open":"20:00","close":"23:45","enabled":true}}}'::jsonb,
   service_start_date date,
   printer_price_per_ticket numeric(10,4) not null default 0,
   monthly_management_fee numeric(10,2) not null default 0,
@@ -195,6 +197,7 @@ alter table public.orders add column if not exists customer_email text;
 update public.orders set customer_email='pendiente@soho.invalid' where customer_email is null;
 alter table public.orders alter column customer_email set not null;
 alter table public.orders add column if not exists invoice_requested boolean not null default false;
+alter table public.orders add column if not exists invoice_number text;
 alter table public.orders add column if not exists billing_tax_id text;
 alter table public.orders add column if not exists billing_name text;
 alter table public.orders add column if not exists billing_address text;
@@ -219,6 +222,7 @@ alter table public.orders add column if not exists archived_at timestamptz;
 
 alter table public.business_settings add column if not exists minimum_order numeric(10,2) not null default 0;
 alter table public.business_settings add column if not exists default_wait_minutes integer not null default 10;
+alter table public.business_settings add column if not exists kitchen_hours jsonb not null default '{}'::jsonb;
 alter table public.business_settings add column if not exists service_start_date date;
 alter table public.business_settings add column if not exists printer_price_per_ticket numeric(10,4) not null default 0;
 alter table public.business_settings add column if not exists monthly_management_fee numeric(10,2) not null default 0;
@@ -304,6 +308,41 @@ begin
     end if;
   end loop;
 end $$;
+
+-- Compatibilidad final de checkout/facturación -------------------------------
+alter table public.orders drop constraint if exists orders_estimated_time_check;
+alter table public.orders add constraint orders_estimated_time_check check (estimated_time is null or estimated_time between 5 and 10080);
+
+create unique index if not exists orders_invoice_number_unique on public.orders(invoice_number) where invoice_number is not null;
+
+create table if not exists public.invoice_web_counter (
+  id smallint primary key default 1 check (id = 1),
+  last_number integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+insert into public.invoice_web_counter(id,last_number) values(1,0) on conflict(id) do nothing;
+
+create or replace function public.assign_invoice_number()
+returns trigger
+language plpgsql security definer set search_path=public
+as $
+declare v_number integer;
+begin
+  if new.invoice_requested = true and new.payment_status = 'paid' and new.invoice_number is null then
+    update public.invoice_web_counter
+    set last_number=last_number+1, updated_at=now()
+    where id=1
+    returning last_number into v_number;
+    new.invoice_number := format('F-WEB-%s',lpad(v_number::text,4,'0'));
+  end if;
+  return new;
+end $;
+revoke all on function public.assign_invoice_number() from public;
+
+drop trigger if exists orders_assign_invoice_number on public.orders;
+create trigger orders_assign_invoice_number
+before insert or update of invoice_requested,payment_status,paid_at on public.orders
+for each row execute function public.assign_invoice_number();
 
 -- Índices --------------------------------------------------------------------
 create unique index if not exists orders_order_token_key on public.orders(order_token);
@@ -395,7 +434,7 @@ declare
 begin
   foreach required_table in array array[
     'categories','products','admin_users','orders','order_items','order_events',
-    'stripe_webhook_events','order_email_deliveries','print_jobs','business_settings','contact_messages'
+    'stripe_webhook_events','order_email_deliveries','print_jobs','business_settings','contact_messages','invoice_web_counter'
   ] loop
     if to_regclass('public.' || required_table) is null then
       missing := array_append(missing,'table:' || required_table);
@@ -403,7 +442,7 @@ begin
   end loop;
 
   foreach required_column in array array[
-    'id','customer_name','customer_phone','customer_email','invoice_requested','billing_tax_id',
+    'id','customer_name','customer_phone','customer_email','invoice_requested','invoice_number','billing_tax_id',
     'billing_name','billing_address','billing_postal_code','billing_city','billing_province','order_type','delivery_address','notes',
     'status','payment_status','payment_method','stripe_session_id','stripe_payment_intent_id',
     'stripe_refund_id','checkout_attempt_id','cancellation_reason','refund_reason','order_token',
@@ -432,7 +471,7 @@ begin
     'print_jobs.id','print_jobs.order_id','print_jobs.status','print_jobs.attempts','print_jobs.worker_id',
     'print_jobs.claimed_at','print_jobs.printed_at','print_jobs.last_error','print_jobs.created_at','print_jobs.updated_at',
     'business_settings.id','business_settings.opening_time','business_settings.closing_time','business_settings.manual_pause',
-    'business_settings.closed_days','business_settings.minimum_order','business_settings.weekly_hours','business_settings.service_start_date',
+    'business_settings.closed_days','business_settings.minimum_order','business_settings.weekly_hours','business_settings.kitchen_hours','business_settings.service_start_date',
     'business_settings.default_wait_minutes',
     'business_settings.printer_price_per_ticket','business_settings.monthly_management_fee','business_settings.monthly_hosting_fee',
     'business_settings.annual_domain_fee','business_settings.fiscal_name','business_settings.fiscal_nif','business_settings.fiscal_address',
@@ -541,6 +580,7 @@ alter table public.order_email_deliveries enable row level security;
 alter table public.print_jobs enable row level security;
 alter table public.business_settings enable row level security;
 alter table public.contact_messages enable row level security;
+alter table public.invoice_web_counter enable row level security;
 
 -- El panel depende de cambios en tiempo real para mostrar una autorizacion
 -- inmediatamente despues de que el webhook active el pedido.
@@ -557,6 +597,8 @@ grant select on public.categories,public.products,public.business_settings to an
 grant all on public.categories,public.products,public.orders,public.order_items,public.order_events,public.business_settings,public.contact_messages to authenticated;
 grant select on public.admin_users to authenticated;
 grant all on all tables in schema public to service_role;
+revoke all on public.invoice_web_counter from anon,authenticated;
+grant all on public.invoice_web_counter to service_role;
 grant usage,select on all sequences in schema public to service_role;
 
 -- Políticas públicas y de administración.
@@ -608,13 +650,15 @@ where received_acknowledged_at is null and created_at < now() - interval '10 min
 
 
 -- Comprobación rápida posterior a la instalación ------------------------------
-create or replace view public.soho_production_schema_check as
+drop view if exists public.soho_production_schema_check;
+create view public.soho_production_schema_check with (security_invoker = true) as
 select
   to_regclass('public.orders') is not null as orders_ok,
   to_regclass('public.order_items') is not null as order_items_ok,
   to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_ok,
   to_regclass('public.order_email_deliveries') is not null as order_email_deliveries_ok,
   to_regclass('public.print_jobs') is not null as print_jobs_ok,
-  to_regclass('public.business_settings') is not null as business_settings_ok;
+  to_regclass('public.business_settings') is not null as business_settings_ok,
+  to_regclass('public.invoice_web_counter') is not null as invoice_web_counter_ok;
 
 notify pgrst,'reload schema';
