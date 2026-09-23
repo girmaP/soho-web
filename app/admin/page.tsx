@@ -137,24 +137,34 @@ function DashboardBars({ title, data, range, onRange, valueKey, money = false, c
   const chartHeight = height - margin.top - margin.bottom;
   const values = data.map((row: any) => Number(row[valueKey] || 0));
   const rawMax = Math.max(0, ...values);
-  const max = rawMax > 0 ? rawMax * 1.12 : 1;
-  const ticks = 4;
+
+  const integerStep = Math.max(1, Math.ceil(Math.max(1, rawMax) / 4));
+  const integerMax = Math.max(1, Math.ceil(Math.max(1, rawMax) / integerStep) * integerStep);
+  const moneyMax = rawMax > 0 ? rawMax * 1.12 : 1;
+  const max = money ? moneyMax : integerMax;
+  const tickValues = money
+    ? Array.from({ length: 5 }, (_, index) => (max / 4) * index)
+    : Array.from({ length: Math.floor(integerMax / integerStep) + 1 }, (_, index) => index * integerStep);
+
   const slot = data.length ? chartWidth / data.length : chartWidth;
   const barWidth = Math.max(10, Math.min(46, slot * 0.58));
   const axisColor = '#94a3b8';
   const barColor = color?.includes('sky') ? '#0ea5e9' : '#10b981';
+  const animationKey = data.map((row: any) => `${row.key}:${Number(row[valueKey] || 0)}`).join('|');
 
-  return <div className="rounded-[28px] border border-black/10 bg-white p-6 shadow-sm">
+  return <div className="group rounded-[28px] border border-black/10 bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-lg">
     <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black">{title}</h2>{range && onRange && <RangeSelector compact value={range} onChange={onRange} />}</div>
-    <div className="mt-6 rounded-3xl bg-[#f8fafc] p-3">
-      {!data.length ? <div className="grid h-72 place-items-center text-sm font-bold text-slate-500">Sin datos en este periodo.</div> :
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={title}>
+    <div className="mt-6 overflow-hidden rounded-3xl bg-[#f8fafc] p-3">
+      {!data.length ? <div className="grid h-72 place-items-center text-sm font-bold text-slate-500"><span className="animate-pulse">Sin datos en este periodo.</span></div> :
+      <svg key={animationKey} viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={title}>
         <line x1={margin.left} y1={margin.top} x2={margin.left} y2={margin.top + chartHeight} stroke={axisColor} strokeWidth="1.5" />
         <line x1={margin.left} y1={margin.top + chartHeight} x2={margin.left + chartWidth} y2={margin.top + chartHeight} stroke={axisColor} strokeWidth="1.5" />
-        {Array.from({ length: ticks + 1 }).map((_, index) => {
-          const value = (max / ticks) * index;
+        {tickValues.map((value, index) => {
           const y = margin.top + chartHeight - (value / max) * chartHeight;
-          return <g key={index}><line x1={margin.left} y1={y} x2={margin.left + chartWidth} y2={y} stroke="#e2e8f0" strokeWidth="1" /><text x={margin.left - 10} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{money ? `${value.toFixed(value >= 100 ? 0 : 1)} €` : Math.round(value)}</text></g>;
+          return <g key={`${value}-${index}`} className="dashboard-grid-line">
+            <line x1={margin.left} y1={y} x2={margin.left + chartWidth} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+            <text x={margin.left - 10} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{money ? `${value.toFixed(value >= 100 ? 0 : 1)} €` : value}</text>
+          </g>;
         })}
         {data.map((row: any, index: number) => {
           const value = Number(row[valueKey] || 0);
@@ -162,16 +172,62 @@ function DashboardBars({ title, data, range, onRange, valueKey, money = false, c
           const barHeight = rawMax === 0 ? 0 : (value / max) * chartHeight;
           const y = margin.top + chartHeight - barHeight;
           const showLabel = data.length <= 16 || index % Math.ceil(data.length / 12) === 0 || index === data.length - 1;
-          return <g key={row.key}>
+          return <g key={row.key} className="dashboard-bar-group">
             <title>{`${row.label}: ${money ? formatPrice(value) : `${value} pedidos`}`}</title>
-            <rect x={x - barWidth / 2} y={y} width={barWidth} height={Math.max(value > 0 ? 3 : 0, barHeight)} rx="7" fill={barColor} />
-            {showLabel && <text x={x} y={margin.top + chartHeight + 22} textAnchor="middle" fontSize="10" fill="#64748b">{row.label}</text>}
+            <rect
+              x={x - barWidth / 2}
+              y={y}
+              width={barWidth}
+              height={Math.max(value > 0 ? 3 : 0, barHeight)}
+              rx="7"
+              fill={barColor}
+              className="dashboard-bar cursor-pointer"
+              style={{
+                transformBox: 'fill-box',
+                transformOrigin: 'center bottom',
+                animationDelay: `${Math.min(index * 35, 420)}ms`
+              }}
+            />
+            {showLabel && <text x={x} y={margin.top + chartHeight + 22} textAnchor="middle" fontSize="10" fill="#64748b" className="dashboard-axis-label">{row.label}</text>}
           </g>;
         })}
         <text x={margin.left + chartWidth / 2} y={height - 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="#475569">Tiempo</text>
         <text x="15" y={margin.top + chartHeight / 2} transform={`rotate(-90 15 ${margin.top + chartHeight / 2})`} textAnchor="middle" fontSize="12" fontWeight="700" fill="#475569">{money ? 'Ingresos (€)' : 'Cantidad de pedidos'}</text>
       </svg>}
     </div>
+    <style jsx>{`
+      .dashboard-bar {
+        animation: dashboardBarGrow 560ms cubic-bezier(.2,.8,.2,1) both;
+        transition: opacity 180ms ease, filter 180ms ease, transform 180ms ease;
+      }
+      .dashboard-bar-group:hover .dashboard-bar {
+        filter: brightness(.92) saturate(1.15);
+        transform: scaleY(1.025);
+      }
+      .dashboard-bar-group:hover ~ .dashboard-bar-group .dashboard-bar {
+        opacity: .78;
+      }
+      .dashboard-grid-line,
+      .dashboard-axis-label {
+        animation: dashboardFadeIn 420ms ease both;
+      }
+      @keyframes dashboardBarGrow {
+        from { transform: scaleY(0); opacity: .25; }
+        to { transform: scaleY(1); opacity: 1; }
+      }
+      @keyframes dashboardFadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dashboard-bar,
+        .dashboard-grid-line,
+        .dashboard-axis-label {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    `}</style>
   </div>;
 }
 
@@ -207,6 +263,7 @@ export default function AdminPage() {
   const [selectedDay, setSelectedDay] = useState(todayInputValue());
   const [settings, setSettings] = useState<BusinessSettings>(defaultBusinessSettings);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [refreshingPanel, setRefreshingPanel] = useState(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
 
   async function checkAdmin(userId: string) {
@@ -229,6 +286,16 @@ export default function AdminPage() {
     }
 
     return Boolean(result.data?.user_id);
+  }
+
+  async function refreshPanel() {
+    if (refreshingPanel) return;
+    setRefreshingPanel(true);
+    try {
+      await Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings()]);
+    } finally {
+      setRefreshingPanel(false);
+    }
   }
 
   async function loadSession() {
@@ -843,15 +910,15 @@ export default function AdminPage() {
                 <RangeSelector value={dashboardRange} onChange={(range) => { setDashboardRange(range); setRevenueRange(range); setOrdersRange(range); setTicketRange(range); setProductsRange(range); }} />
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[28px] border border-emerald-200/80 bg-emerald-50/70 p-6 shadow-sm"><p className="text-sm font-black text-[#17633c]">Ingresos</p><strong className="mt-2 block text-4xl font-black text-[#123524]">{formatPrice(dashboardData.rows.reduce((s,r)=>s+r.revenue,0))}</strong><p className="mt-2 text-xs font-bold text-[#17633c]">Sin pedidos cancelados</p></div>
-                <div className="rounded-[28px] border border-sky-200/80 bg-sky-50/70 p-6 shadow-sm"><p className="text-sm font-black text-[#225a91]">Pedidos</p><strong className="mt-2 block text-4xl font-black text-[#17334f]">{dashboardData.filtered.length}</strong><p className="mt-2 text-xs font-bold text-[#225a91]">Periodo seleccionado</p></div>
-                <div className="rounded-[28px] border border-amber-200/80 bg-amber-50/70 p-6 shadow-sm"><p className="text-sm font-black text-[#7a350d]">Ticket medio</p><strong className="mt-2 block text-4xl font-black text-[#52270b]">{formatPrice(dashboardData.rows.reduce((s,r)=>s+r.revenue,0)/Math.max(1,dashboardData.rows.reduce((s,r)=>s+r.validOrders,0)))}</strong><p className="mt-2 text-xs font-bold text-[#7a350d]">Promedio real</p></div>
-                <div className="rounded-[28px] border border-[#ffbfd1] bg-[#ffe4ec] p-6 shadow-sm"><p className="text-sm font-black text-[#9f1239]">Cancelados</p><strong className="mt-2 block text-4xl font-black text-[#5f0f2e]">{dashboardData.rows.reduce((s,r)=>s+r.cancelled,0)}</strong><p className="mt-2 text-xs font-bold text-[#9f1239]">No suman en ingresos</p></div>
+                <div className="rounded-[28px] border border-emerald-200/80 bg-emerald-50/70 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-sm font-black text-[#17633c]">Ingresos</p><strong className="mt-2 block text-4xl font-black text-[#123524]">{formatPrice(dashboardData.rows.reduce((s,r)=>s+r.revenue,0))}</strong><p className="mt-2 text-xs font-bold text-[#17633c]">Sin pedidos cancelados</p></div>
+                <div className="rounded-[28px] border border-sky-200/80 bg-sky-50/70 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-sm font-black text-[#225a91]">Pedidos</p><strong className="mt-2 block text-4xl font-black text-[#17334f]">{dashboardData.filtered.length}</strong><p className="mt-2 text-xs font-bold text-[#225a91]">Periodo seleccionado</p></div>
+                <div className="rounded-[28px] border border-amber-200/80 bg-amber-50/70 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-sm font-black text-[#7a350d]">Ticket medio</p><strong className="mt-2 block text-4xl font-black text-[#52270b]">{formatPrice(dashboardData.rows.reduce((s,r)=>s+r.revenue,0)/Math.max(1,dashboardData.rows.reduce((s,r)=>s+r.validOrders,0)))}</strong><p className="mt-2 text-xs font-bold text-[#7a350d]">Promedio real</p></div>
+                <div className="rounded-[28px] border border-[#ffbfd1] bg-[#ffe4ec] p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-sm font-black text-[#9f1239]">Cancelados</p><strong className="mt-2 block text-4xl font-black text-[#5f0f2e]">{dashboardData.rows.reduce((s,r)=>s+r.cancelled,0)}</strong><p className="mt-2 text-xs font-bold text-[#9f1239]">No suman en ingresos</p></div>
               </div>
               <div className="mt-6 grid gap-5 xl:grid-cols-2">
                 <DashboardBars title="Ingresos por periodo" data={revenueData.rows} range={revenueRange} onRange={setRevenueRange} valueKey="revenue" money color="bg-emerald-500" />
                 <DashboardBars title="Pedidos por periodo" data={ordersData.rows} range={ordersRange} onRange={setOrdersRange} valueKey="orders" color="bg-sky-500" />
-                <div className="rounded-[28px] border border-black/10 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black">Ticket medio</h2><RangeSelector compact value={ticketRange} onChange={setTicketRange} /></div><div className="mt-5 grid gap-3">{ticketData.rows.map((row:any)=><div key={row.key} className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-sm font-bold"><span className="text-slate-500">{row.label}</span><div className="h-3 rounded-full bg-slate-100"><div className="h-3 rounded-full bg-amber-400" style={{width:`${Math.min(100,(row.averageTicket/Math.max(1,...ticketData.rows.map((r:any)=>r.averageTicket)))*100)}%`}}/></div><strong>{formatPrice(row.averageTicket)}</strong></div>)}</div></div>
+                <div className="rounded-[28px] border border-black/10 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black">Ticket medio</h2><RangeSelector compact value={ticketRange} onChange={setTicketRange} /></div><div className="mt-5 grid gap-3">{ticketData.rows.map((row:any)=><div key={row.key} className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-sm font-bold"><span className="text-slate-500">{row.label}</span><div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-3 origin-left rounded-full bg-amber-400 transition-[width,transform] duration-700 ease-out hover:scale-y-125" style={{width:`${Math.min(100,(row.averageTicket/Math.max(1,...ticketData.rows.map((r:any)=>r.averageTicket)))*100)}%`}}/></div><strong>{formatPrice(row.averageTicket)}</strong></div>)}</div></div>
                 <div className="rounded-[28px] border border-black/10 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black">Productos top</h2><RangeSelector compact value={productsRange} onChange={setProductsRange} /></div><div className="mt-5 grid gap-3">{productsData.map((product)=><div key={product.name} className="flex justify-between rounded-3xl bg-[#f8fafc] px-5 py-4 text-sm font-bold"><span>{product.name}</span><strong>{product.quantity} uds · {formatPrice(product.total)}</strong></div>)}{!productsData.length&&<p className="rounded-3xl bg-[#f8fafc] p-5 text-sm font-bold text-slate-500">Sin datos en este periodo.</p>}</div></div>
               </div>
 
@@ -889,7 +956,10 @@ export default function AdminPage() {
                   <h1 className="text-4xl font-black tracking-tight text-neutral-950">Pedidos</h1>
                   <p className="mt-2 text-sm font-semibold text-neutral-700">Gestiona los pedidos de hoy en tiempo real.</p>
                 </div>
-                <button onClick={() => Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings()])} className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-neutral-950 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5">Recargar panel</button>
+                <button onClick={refreshPanel} disabled={refreshingPanel} className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-neutral-950 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70">
+                  {refreshingPanel && <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-[#049ca5]" aria-hidden="true" />}
+                  {refreshingPanel ? 'Actualizando…' : 'Recargar panel'}
+                </button>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
