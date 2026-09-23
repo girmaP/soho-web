@@ -68,23 +68,25 @@ export default function HomePage() {
   return (
     <main className="bg-[#f8f4ee]">
       <section className="relative min-h-[calc(100vh-68px)] overflow-hidden bg-neutral-950">
-        <Image src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=1800&auto=format&fit=crop" alt="Hamburguesa SOHO Cambados" fill priority className="object-cover opacity-60" />
+        <Image src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=1800&auto=format&fit=crop" alt="Hamburguesa SOHO Cambados" fill priority className="soho-hero-zoom object-cover opacity-60" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/25" />
+        <div className="soho-float absolute -left-16 top-28 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="soho-float absolute bottom-20 right-8 h-72 w-72 rounded-full bg-orange-400/10 blur-3xl [animation-delay:1.2s]" />
         <div className="relative mx-auto flex min-h-[calc(100vh-68px)] max-w-7xl items-center px-4 py-16">
           <div className="max-w-4xl">
-            <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-tight text-white md:text-7xl lg:text-8xl">Hamburguesas y mucho más en SOHO Cambados.</h1>
+            <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-tight text-white drop-shadow-2xl md:text-7xl lg:text-8xl">Hamburguesas y mucho más en SOHO Cambados.</h1>
             <p className="mt-7 max-w-2xl text-lg font-semibold leading-8 text-white/90 md:text-xl">Consulta la carta, prepara tu pedido para recoger y sigue el estado en tiempo real. Para domicilio, accede directamente al perfil de SOHO en Caylu.</p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/menu" className="rounded-2xl bg-white px-7 py-4 font-black text-neutral-950 shadow-xl transition hover:-translate-y-0.5 hover:bg-cyan-50">Pedir para recoger</Link>
-              <a href={siteConfig.cayluUrl} target="_blank" rel="noreferrer" className="rounded-2xl bg-[#049ca5] px-7 py-4 font-black text-white shadow-xl shadow-cyan-950/25 transition hover:-translate-y-0.5 hover:bg-[#037f86]">Pedir a domicilio con Caylu</a>
+              <Link href="/menu" className="soho-shimmer rounded-2xl bg-white px-7 py-4 font-black text-neutral-950 shadow-xl transition hover:-translate-y-1 hover:scale-[1.02] hover:bg-cyan-50 hover:shadow-2xl">Pedir para recoger</Link>
+              <a href={siteConfig.cayluUrl} target="_blank" rel="noreferrer" className="rounded-2xl bg-[#049ca5] px-7 py-4 font-black text-white shadow-xl shadow-cyan-950/25 transition hover:-translate-y-1 hover:scale-[1.02] hover:bg-[#037f86] hover:shadow-2xl">Pedir a domicilio con Caylu</a>
             </div>
 
             <div className="mt-6 max-w-4xl rounded-2xl border border-white/15 bg-black/30 px-5 py-4 text-sm font-bold leading-6 text-white/85 backdrop-blur">
               {businessHoursLabelFromSettings(settings)} Puedes hacer el pedido antes de que abra la cocina; la recogida se programa automáticamente para la primera hora disponible.
             </div>
 
-            <div className="mt-5 grid max-w-4xl gap-0 overflow-hidden rounded-[2rem] border border-white/20 bg-black/20 p-4 shadow-2xl backdrop-blur md:grid-cols-2">
+            <div className="mt-5 grid max-w-4xl gap-0 overflow-hidden rounded-[2rem] border border-white/20 bg-black/20 p-4 shadow-2xl backdrop-blur transition duration-500 hover:border-white/30 hover:bg-black/25 md:grid-cols-2">
               <div className="rounded-[1.5rem] p-5 text-white">
                 <strong className="text-lg">Recogida en local</strong>
                 <p className="mt-2 text-sm font-medium leading-6 text-white/80">Completa el pago y el pedido entra directamente en SOHO. Si eliges «lo antes posible», ahora mismo la primera recogida estimada sería sobre las {fastestLabel}. También puedes seleccionar otra hora disponible de cocina.</p>
@@ -102,14 +104,14 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-7xl px-4 py-16">
         <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-[1.5rem] border border-black/10 bg-white p-7 shadow-sm"><div className="flex gap-5"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-orange-500"><ListOrdered size={28} /></span><div><h2 className="text-xl font-black text-neutral-950">1. Elige</h2><p className="mt-2 text-sm font-medium leading-6 text-neutral-600">Consulta la carta desde el móvil y añade productos al carrito.</p></div></div></div>
-          <div className="rounded-[1.5rem] border border-black/10 bg-white p-7 shadow-sm"><div className="flex gap-5"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-orange-500"><UserRound size={28} /></span><div><h2 className="text-xl font-black text-neutral-950">2. Envía</h2><p className="mt-2 text-sm font-medium leading-6 text-neutral-600">Deja nombre, teléfono y notas para recogida en local.</p></div></div></div>
-          <div className="rounded-[1.5rem] border border-black/10 bg-white p-7 shadow-sm"><div className="flex gap-5"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-orange-500"><Clock3 size={28} /></span><div><h2 className="text-xl font-black text-neutral-950">3. Recoge desde las {fastestLabel}</h2><p className="mt-2 text-sm font-medium leading-6 text-neutral-600">«Lo antes posible» se adapta al horario de cocina y al tiempo de preparación. También puedes elegir otra hora disponible.</p></div></div></div>
+          <div className="soho-interactive-card soho-lift rounded-[1.5rem] border border-black/10 bg-white p-7 shadow-sm"><div className="flex gap-5"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-orange-500"><ListOrdered size={28} /></span><div><h2 className="text-xl font-black text-neutral-950">1. Elige</h2><p className="mt-2 text-sm font-medium leading-6 text-neutral-600">Consulta la carta desde el móvil y añade productos al carrito.</p></div></div></div>
+          <div className="soho-interactive-card soho-lift rounded-[1.5rem] border border-black/10 bg-white p-7 shadow-sm"><div className="flex gap-5"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-orange-500"><UserRound size={28} /></span><div><h2 className="text-xl font-black text-neutral-950">2. Envía</h2><p className="mt-2 text-sm font-medium leading-6 text-neutral-600">Deja nombre, teléfono y notas para recogida en local.</p></div></div></div>
+          <div className="soho-interactive-card soho-lift rounded-[1.5rem] border border-black/10 bg-white p-7 shadow-sm"><div className="flex gap-5"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-orange-500"><Clock3 size={28} /></span><div><h2 className="text-xl font-black text-neutral-950">3. Recoge desde las {fastestLabel}</h2><p className="mt-2 text-sm font-medium leading-6 text-neutral-600">«Lo antes posible» se adapta al horario de cocina y al tiempo de preparación. También puedes elegir otra hora disponible.</p></div></div></div>
         </div>
       </section>
 
       <section id="contacto" className="mx-auto max-w-7xl px-4 pb-16">
-        <div className="grid overflow-hidden rounded-[2rem] border border-black/10 bg-white shadow-sm lg:grid-cols-2">
+        <div className="grid overflow-hidden rounded-[2rem] border border-black/10 bg-white shadow-sm transition duration-500 hover:shadow-xl lg:grid-cols-2">
           <div className="p-6 md:p-10">
             <p className="text-xs font-black uppercase tracking-[0.28em] text-[#049ca5]">Contacto</p>
             <h2 className="mt-3 text-4xl font-black tracking-tight text-neutral-950">¿Tienes alguna duda?</h2>
