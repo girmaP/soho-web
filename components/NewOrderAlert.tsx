@@ -8,6 +8,9 @@ import { supabase } from '@/lib/supabaseClient';
 type Props = { orders: any[]; onAcknowledged: () => Promise<void> | void };
 const ACTIVE_STATUSES = new Set(['pending', 'accepted', 'preparing', 'ready']);
 const DURATIONS = [5, 10, 15, 30, 60];
+// Un aviso de "nuevo pedido" no debe bloquear el panel indefinidamente si quedó sin confirmar.
+// 12 h cubre sobradamente pedidos nocturnos que crucen medianoche, pero evita arrastrar avisos del día anterior.
+const ALERT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 export function NewOrderAlert({ orders, onAcknowledged }: Props) {
   const [activated, setActivated] = useState(false);
@@ -43,8 +46,16 @@ export function NewOrderAlert({ orders, onAcknowledged }: Props) {
   }, [mutedUntil, now]);
 
   const pending = useMemo(
-    () => orders.filter((order) => !order.received_acknowledged_at && ACTIVE_STATUSES.has(order.status) && ['authorized', 'paid', 'refund_pending', 'refunded'].includes(order.payment_status)),
-    [orders]
+    () => orders.filter((order) => {
+      if (order.received_acknowledged_at) return false;
+      if (!ACTIVE_STATUSES.has(order.status)) return false;
+      if (!['authorized', 'paid', 'refund_pending', 'refunded'].includes(order.payment_status)) return false;
+
+      const createdAt = Date.parse(order.created_at || '');
+      if (!Number.isFinite(createdAt)) return false;
+      return now - createdAt <= ALERT_MAX_AGE_MS;
+    }),
+    [orders, now]
   );
   const isTemporarilyMuted = mutedUntil > now;
   const canSound = activated && !soundDisabled && !isTemporarilyMuted;
@@ -139,12 +150,37 @@ export function NewOrderAlert({ orders, onAcknowledged }: Props) {
   async function acknowledge(orderId: string) {
     setBusyId(orderId);
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error('La sesión ha caducado.');
-      const response = await fetch(`/api/admin/orders/${orderId}/acknowledge`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      const postAcknowledgement = (token: string) => fetch(`/api/admin/orders/${orderId}/acknowledge`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      let { data } = await supabase.auth.getSession();
+      let token = data.session?.access_token;
+
+      if (!token) {
+        const refreshed = await supabase.auth.refreshSession();
+        token = refreshed.data.session?.access_token;
+      }
+
+      if (!token) throw new Error('La sesión del panel ha caducado. Vuelve a iniciar sesión.');
+
+      let response = await postAcknowledgement(token);
+
+      // Si el navegador llevaba tiempo abierto puede conservar un access token caducado.
+      // Renovamos la sesión y repetimos una sola vez antes de mostrar un error.
+      if (response.status === 401) {
+        const refreshed = await supabase.auth.refreshSession();
+        const refreshedToken = refreshed.data.session?.access_token;
+        if (refreshedToken) response = await postAcknowledgement(refreshedToken);
+      }
+
       const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.error || 'No se pudo confirmar el pedido.');
+      if (!response.ok) {
+        if (response.status === 401) throw new Error('La sesión del panel ha caducado. Vuelve a iniciar sesión.');
+        throw new Error(result?.error || 'No se pudo confirmar el pedido.');
+      }
+
       await onAcknowledged();
     } catch (error: any) {
       alert(error?.message || 'No se pudo confirmar el pedido.');
