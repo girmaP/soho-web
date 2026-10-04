@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { appendOrderEvent } from '@/lib/server/orderEvents';
 import { sendOrderEmail } from '@/lib/server/orderEmails';
 import { enqueueOrderForPrinting } from '@/lib/server/printJobs';
+import { getStripeFeeAmount } from '@/lib/server/stripeFees';
 
 type ActivationSource = 'stripe_webhook' | 'checkout_return' | 'order_tracking';
 
@@ -49,8 +50,9 @@ export async function activatePaidOrder(params: {
     ? requestedWaitMinutes
     : configuredWaitMinutes;
   const alreadyActive = order.payment_status === 'paid' && ['accepted', 'preparing', 'ready', 'delivered'].includes(order.status);
+  const stripeFeeAmount = await getStripeFeeAmount(paymentIntent.id);
 
-  const { data: updated, error: updateError } = await supabaseAdmin.from('orders').update({
+  const updatePayload: Record<string, unknown> = {
     status: alreadyActive ? order.status : 'accepted',
     payment_status: 'paid',
     stripe_payment_intent_id: paymentIntent.id,
@@ -60,7 +62,10 @@ export async function activatePaidOrder(params: {
     preparing_at: order.preparing_at,
     estimated_time: alreadyActive && order.estimated_time ? order.estimated_time : waitMinutes,
     updated_at: now
-  }).eq('id', orderId).select('*').single();
+  };
+  if (stripeFeeAmount !== null) updatePayload.stripe_fee_amount = stripeFeeAmount;
+
+  const { data: updated, error: updateError } = await supabaseAdmin.from('orders').update(updatePayload).eq('id', orderId).select('*').single();
   if (updateError) throw updateError;
 
   if (!alreadyActive) {
