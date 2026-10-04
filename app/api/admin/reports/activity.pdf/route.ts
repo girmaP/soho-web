@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/server/adminAuth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getStripeFeeAmount } from '@/lib/server/stripeFees';
 
 function money(value: number) { return `${value.toFixed(2).replace('.', ',')} EUR`; }
 function clean(value: unknown) { return String(value ?? '').replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[^\x20-\xFF]/g, '?'); }
@@ -130,7 +131,7 @@ export async function GET(request: Request) {
     if(toDate.getTime()-fromDate.getTime()>366*86400000)return NextResponse.json({error:'El informe permite un maximo de un ano.'},{status:400});
 
     const [{data:orders,error},{data:settings}]=await Promise.all([
-      supabaseAdmin.from('orders').select('id,created_at,order_type,status,payment_status,total_price,stripe_fee_amount,refunded_amount,refund_reason,order_items(product_name,quantity,total_price,vat_rate)').gte('created_at',fromDate.toISOString()).lte('created_at',toDate.toISOString()).or('payment_status.in.(authorized,paid,refund_pending,refunded),stripe_payment_intent_id.not.is.null').order('created_at'),
+      supabaseAdmin.from('orders').select('id,created_at,order_type,status,payment_status,total_price,stripe_fee_amount,stripe_payment_intent_id,refunded_amount,refund_reason,order_items(product_name,quantity,total_price,vat_rate)').gte('created_at',fromDate.toISOString()).lte('created_at',toDate.toISOString()).or('payment_status.in.(authorized,paid,refund_pending,refunded),stripe_payment_intent_id.not.is.null').order('created_at'),
       supabaseAdmin.from('business_settings').select('*').eq('id','main').maybeSingle()
     ]);
     if(error)throw error;
@@ -162,6 +163,20 @@ export async function GET(request: Request) {
         if(refundRatio>0)addVat(refundVatMap,rate,itemTotal*refundRatio);
       });
     });
+    await Promise.all(captured.map(async (o:any) => {
+      if (Number(o.stripe_fee_amount || 0) > 0 || !o.stripe_payment_intent_id) return;
+      const fee = await getStripeFeeAmount(o.stripe_payment_intent_id);
+      if (fee === null) return;
+      o.stripe_fee_amount = fee;
+      const { error: feeUpdateError } = await supabaseAdmin
+        .from('orders')
+        .update({ stripe_fee_amount: fee })
+        .eq('id', o.id);
+      if (feeUpdateError) {
+        console.error('stripe_fee_backfill_failed', { orderId: o.id, error: feeUpdateError.message });
+      }
+    }));
+
     const stripeFees=captured.reduce((s:number,o:any)=>s+Number(o.stripe_fee_amount||0),0),tickets=captured.length;
     const printerUnit=Number(settings?.printer_price_per_ticket||0);
     const printer=tickets*printerUnit;
