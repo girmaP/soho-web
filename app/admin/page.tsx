@@ -746,14 +746,44 @@ export default function AdminPage() {
 
 
   async function downloadManagementPdf() {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) return alert('La sesión ha caducado.');
     const query = new URLSearchParams({ from: historyRange.from, to: historyRange.to });
-    const response = await fetch(`/api/admin/reports/activity.pdf?${query}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!response.ok) { const result = await response.json().catch(() => null); return alert(result?.error || 'No se pudo generar el PDF.'); }
-    const blob = await response.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = `informe-soho-${historyRange.from}-${historyRange.to}.pdf`; a.click(); URL.revokeObjectURL(url);
+
+    const requestPdf = (token: string) => fetch(`/api/admin/reports/activity.pdf?${query}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    let { data } = await supabase.auth.getSession();
+    let token = data.session?.access_token;
+
+    if (!token) {
+      const refreshed = await supabase.auth.refreshSession();
+      token = refreshed.data.session?.access_token;
+    }
+
+    if (!token) return alert('La sesión del panel ha caducado. Vuelve a iniciar sesión.');
+
+    let response = await requestPdf(token);
+
+    if (response.status === 401) {
+      const refreshed = await supabase.auth.refreshSession();
+      const refreshedToken = refreshed.data.session?.access_token;
+      if (refreshedToken) response = await requestPdf(refreshedToken);
+    }
+
+    if (!response.ok) {
+      const result = await response.json().catch(() => null);
+      return alert(response.status === 401
+        ? 'La sesión del panel ha caducado. Vuelve a iniciar sesión.'
+        : result?.error || 'No se pudo generar el PDF.');
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `informe-soho-${historyRange.from}-${historyRange.to}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function exportRangeCsv() {
