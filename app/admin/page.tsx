@@ -7,6 +7,7 @@ import { LayoutDashboard, ClipboardList, Mail, CalendarDays, History, Package, C
 import { supabase } from '@/lib/supabaseClient';
 import { AdminOrderCard } from '@/components/AdminOrderCard';
 import { NewOrderAlert } from '@/components/NewOrderAlert';
+import { MaintenanceExpiryAlert } from '@/components/MaintenanceExpiryAlert';
 import { formatPrice } from '@/utils/formatPrice';
 import { BusinessSettings, businessHoursLabelFromSettings, defaultBusinessSettings, getBusinessSettings, isBusinessOpenFromSettings, orderedDays } from '@/lib/businessConfig';
 import { RangeSelector } from '@/components/RangeSelector';
@@ -889,6 +890,7 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-[#fff7ed] text-neutral-950">
       <NewOrderAlert orders={orders} onAcknowledged={loadOrders} />
+      <MaintenanceExpiryAlert serviceStartDate={settings.service_start_date} />
       <div className="grid min-h-screen lg:grid-cols-[250px_1fr]">
         <aside className="border-r border-white/10 bg-neutral-950 p-5 text-white lg:sticky lg:top-0 lg:h-screen">
           <div className="flex items-center gap-3 px-1">
