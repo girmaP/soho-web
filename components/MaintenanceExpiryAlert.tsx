@@ -5,6 +5,7 @@ import { ExternalLink, ShieldCheck, X } from 'lucide-react';
 
 type Props = {
   serviceStartDate: string | null;
+  subscriptionActive?: boolean;
 };
 
 const SUBSCRIPTION_URL = 'https://suscripciones.girma.es/mantenimiento-web#planes';
@@ -28,7 +29,7 @@ function parseServiceDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function MaintenanceExpiryAlert({ serviceStartDate }: Props) {
+export function MaintenanceExpiryAlert({ serviceStartDate, subscriptionActive = false }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [dismissedUntil, setDismissedUntil] = useState(0);
 
@@ -50,7 +51,7 @@ export function MaintenanceExpiryAlert({ serviceStartDate }: Props) {
   const expired = Boolean(expiryDate && now >= expiryDate.getTime());
   const hiddenForNow = dismissedUntil > now;
 
-  if (!expired || hiddenForNow || !expiryDate) return null;
+  if (subscriptionActive || !expired || hiddenForNow || !expiryDate) return null;
 
   const expiryLabel = expiryDate.toLocaleDateString('es-ES', {
     day: '2-digit',
