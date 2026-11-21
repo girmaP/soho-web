@@ -265,6 +265,15 @@ export default function AdminPage() {
   const [settings, setSettings] = useState<BusinessSettings>(defaultBusinessSettings);
   const [savingSettings, setSavingSettings] = useState(false);
   const [refreshingPanel, setRefreshingPanel] = useState(false);
+  const [maintenanceSubscription, setMaintenanceSubscription] = useState<{
+    active: boolean;
+    status: string;
+    plan: { name: string; slug: string } | null;
+    amountMinor: number;
+    currency: string;
+    billingInterval: string | null;
+    currentPeriodEnd: string | null;
+  }>({ active: false, status: 'loading', plan: null, amountMinor: 0, currency: 'EUR', billingInterval: null, currentPeriodEnd: null });
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
 
   async function checkAdmin(userId: string) {
@@ -293,7 +302,7 @@ export default function AdminPage() {
     if (refreshingPanel) return;
     setRefreshingPanel(true);
     try {
-      await Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings()]);
+      await Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings(), loadMaintenanceSubscription()]);
     } finally {
       setRefreshingPanel(false);
     }
@@ -368,7 +377,7 @@ export default function AdminPage() {
       window.sessionStorage.setItem('soho_admin_authenticated', '1');
       setSession(data.session);
       setIsAdmin(true);
-      await Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings()]);
+      await Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings(), loadMaintenanceSubscription()]);
     } catch (err: any) {
       console.error('Error iniciando sesión:', err);
       setError(err?.message || 'No se pudo iniciar sesión en este momento. Inténtalo de nuevo en unos segundos.');
@@ -459,6 +468,44 @@ export default function AdminPage() {
     setSettings(data);
   }
 
+  async function loadMaintenanceSubscription() {
+    try {
+      let { data } = await supabase.auth.getSession();
+      let token = data.session?.access_token;
+      if (!token) {
+        const refreshed = await supabase.auth.refreshSession();
+        token = refreshed.data.session?.access_token;
+      }
+      if (!token) return;
+
+      let response = await fetch('/api/admin/maintenance/status', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
+      });
+
+      if (response.status === 401) {
+        const refreshed = await supabase.auth.refreshSession();
+        const refreshedToken = refreshed.data.session?.access_token;
+        if (refreshedToken) {
+          response = await fetch('/api/admin/maintenance/status', {
+            headers: { Authorization: `Bearer ${refreshedToken}` },
+            cache: 'no-store'
+          });
+        }
+      }
+
+      if (!response.ok) throw new Error('No se pudo consultar la suscripción.');
+      const next = await response.json();
+      setMaintenanceSubscription(next);
+      if (next.active) {
+        setSettings((current) => ({ ...current, monthly_hosting_fee: 0, annual_domain_fee: 0 }));
+      }
+    } catch (subscriptionError) {
+      console.warn('No se pudo consultar el mantenimiento:', subscriptionError);
+      setMaintenanceSubscription((current) => ({ ...current, status: 'unknown' }));
+    }
+  }
+
   async function saveSettings() {
     setSavingSettings(true);
     const { error } = await supabase
@@ -475,8 +522,8 @@ export default function AdminPage() {
         service_start_date: settings.service_start_date || null,
         printer_price_per_ticket: settings.printer_price_per_ticket,
         monthly_management_fee: settings.monthly_management_fee,
-        monthly_hosting_fee: settings.monthly_hosting_fee,
-        annual_domain_fee: settings.annual_domain_fee,
+        monthly_hosting_fee: maintenanceSubscription.active ? 0 : settings.monthly_hosting_fee,
+        annual_domain_fee: maintenanceSubscription.active ? 0 : settings.annual_domain_fee,
         fiscal_name: settings.fiscal_name,
         fiscal_nif: settings.fiscal_nif,
         fiscal_address: settings.fiscal_address,
@@ -611,7 +658,7 @@ export default function AdminPage() {
     loadSession()
       .then(async (allowed) => {
         if (!allowed) return;
-        await Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings()]);
+        await Promise.all([loadOrders(), loadMessages(), loadProducts(), loadCategories(), loadSettings(), loadMaintenanceSubscription()]);
       })
       .catch((err) => {
         console.error('Error inicializando panel admin:', err);
@@ -890,7 +937,7 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-[#fff7ed] text-neutral-950">
       <NewOrderAlert orders={orders} onAcknowledged={loadOrders} />
-      <MaintenanceExpiryAlert serviceStartDate={settings.service_start_date} />
+      <MaintenanceExpiryAlert serviceStartDate={settings.service_start_date} subscriptionActive={maintenanceSubscription.active} />
       <div className="grid min-h-screen lg:grid-cols-[250px_1fr]">
         <aside className="border-r border-white/10 bg-neutral-950 p-5 text-white lg:sticky lg:top-0 lg:h-screen">
           <div className="flex items-center gap-3 px-1">
@@ -1247,12 +1294,38 @@ Somos el equipo de SOHO Cambados. Te escribimos en respuesta al mensaje que nos 
                 <div className="mt-6 rounded-[28px] border border-black/10 bg-cyan-50 p-6">
                   <h2 className="text-2xl font-black text-neutral-950">Configuración de informes y costes web</h2>
                   <p className="mt-2 text-sm font-semibold text-neutral-700">Estos valores se usan en el panel y en el informe PDF para gestoría. Mantenimiento/gestión y hosting son gratuitos durante los 3 primeros meses; el dominio es gratuito durante el primer año. Después se contabilizan únicamente las mensualidades o renovaciones cuya fecha de cobro esté dentro del periodo seleccionado.</p>
+
+                  <div className={`mt-5 rounded-3xl border p-5 ${maintenanceSubscription.active ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-neutral-500">Suscripción de mantenimiento</p>
+                        <strong className={`mt-1 block text-xl font-black ${maintenanceSubscription.active ? 'text-emerald-700' : 'text-amber-800'}`}>
+                          {maintenanceSubscription.active ? 'Suscripción activa' : 'Sin suscripción activa'}
+                        </strong>
+                        {maintenanceSubscription.active && maintenanceSubscription.plan?.name && (
+                          <p className="mt-1 text-sm font-bold text-neutral-600">
+                            Plan {maintenanceSubscription.plan.name}
+                            {maintenanceSubscription.amountMinor > 0 ? ` · ${formatPrice(maintenanceSubscription.amountMinor / 100)}/mes` : ''}
+                          </p>
+                        )}
+                      </div>
+                      {!maintenanceSubscription.active && (
+                        <a href="https://suscripciones.girma.es/mantenimiento-web#planes" target="_blank" rel="noopener noreferrer" className="rounded-2xl bg-[#049ca5] px-5 py-3 text-sm font-black text-white">
+                          Ver planes
+                        </a>
+                      )}
+                    </div>
+                    {maintenanceSubscription.active && (
+                      <p className="mt-3 text-sm font-semibold text-emerald-800">Con la suscripción activa, hosting y dominio están incluidos y se contabilizan a 0 €.</p>
+                    )}
+                  </div>
+
                   <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Inicio del servicio<input type="date" value={settings.service_start_date || ''} onChange={(e)=>setSettings({...settings,service_start_date:e.target.value||null})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
                     <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Precio por ticket<input type="number" step="0.001" min="0" value={settings.printer_price_per_ticket} onChange={(e)=>setSettings({...settings,printer_price_per_ticket:Number(e.target.value||0)})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
                     <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Mantenimiento / gestión mensual<input type="number" step="0.01" min="0" value={settings.monthly_management_fee} onChange={(e)=>setSettings({...settings,monthly_management_fee:Number(e.target.value||0)})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
-                    <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Hosting mensual<input type="number" step="0.01" min="0" value={settings.monthly_hosting_fee} onChange={(e)=>setSettings({...settings,monthly_hosting_fee:Number(e.target.value||0)})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
-                    <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Dominio anual<input type="number" step="0.01" min="0" value={settings.annual_domain_fee} onChange={(e)=>setSettings({...settings,annual_domain_fee:Number(e.target.value||0)})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
+                    <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Hosting mensual<input type="number" step="0.01" min="0" disabled={maintenanceSubscription.active} value={maintenanceSubscription.active ? 0 : settings.monthly_hosting_fee} onChange={(e)=>setSettings({...settings,monthly_hosting_fee:Number(e.target.value||0)})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500" /></label>
+                    <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Dominio anual<input type="number" step="0.01" min="0" disabled={maintenanceSubscription.active} value={maintenanceSubscription.active ? 0 : settings.annual_domain_fee} onChange={(e)=>setSettings({...settings,annual_domain_fee:Number(e.target.value||0)})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500" /></label>
                     <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Razón social<input value={settings.fiscal_name} onChange={(e)=>setSettings({...settings,fiscal_name:e.target.value})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
                     <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">NIF/CIF<input value={settings.fiscal_nif} onChange={(e)=>setSettings({...settings,fiscal_nif:e.target.value})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
                     <label className="grid gap-1 text-xs font-black uppercase text-neutral-700">Correo administrativo<input type="email" value={settings.admin_email} onChange={(e)=>setSettings({...settings,admin_email:e.target.value})} className="rounded-2xl border border-black/10 bg-white p-3 text-sm font-bold normal-case" /></label>
